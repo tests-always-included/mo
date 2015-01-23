@@ -156,6 +156,12 @@ mustache-parse() {
                 mustache-show "$MUSTACHE_TAG"
                 ;;
 
+            '&'*)
+                # Unescaped
+                mustache-trim MUSTACHE_TAG "${MUSTACHE_TAG:1}"
+                mustache-show "$MUSTACHE_TAG"
+                ;;
+
             *)
                 # Normal environment variable or function call
                 mustache-show "$MUSTACHE_TAG"
