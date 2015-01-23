@@ -15,11 +15,9 @@ home_ip={{IP}}
 
 # ALLOWED HOSTS
 {{#ALLOWED_HOSTS}}allowed_host={{.}}
-{{/ALLOWED_HOSTS}}{{^ALLOWED_HOSTS}}# No allowed hosts
-{{/ALLOWED_HOSTS}}
+{{/ALLOWED_HOSTS}}{{^ALLOWED_HOSTS}}# No allowed hosts{{/ALLOWED_HOSTS}}
 
 # DENIED HOSTS
 {{#DENIED_HOSTS}}denied_host={{.}}
-{{/DENIED_HOSTS}}{{^DENIED_HOSTS}}# No denied hosts
-{{/DENIED_HOSTS}}
+{{/DENIED_HOSTS}}{{^DENIED_HOSTS}}# No denied hosts{{/DENIED_HOSTS}}
 EOF
