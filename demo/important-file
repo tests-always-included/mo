@@ -1,0 +1,23 @@
+#!/bin/bash
+
+date-string() { date; }
+wrapper() { echo -n "*** $1 ***"; }
+
+IP=127.0.0.1
+ALLOWED_HOSTS=( 192.168.0.1 192.168.0.2 192.168.0.3 )
+
+cat <<EOF | . mo
+# {{#wrapper}}OH SO IMPORTANT{{/wrapper}}
+# This file automatically generated at {{date-string}}
+home_ip={{IP}}
+
+# ALLOWED HOSTS
+{{#ALLOWED_HOSTS}}allowed_host={{.}}
+{{/ALLOWED_HOSTS}}{{^ALLOWED_HOSTS}}# No allowed hosts
+{{/ALLOWED_HOSTS}}
+
+# DENIED HOSTS
+{{#DENIED_HOSTS}}denied_host={{.}}
+{{/DENIED_HOSTS}}{{^DENIED_HOSTS}}# No denied hosts
+{{/DENIED_HOSTS}}
+EOF

@@ -1,0 +1,30 @@
+#!/bin/bash
+
+cd "$(dirname $0)"
+
+PASS=0
+FAIL=0
+
+for TEST in tests/*.expected; do
+    BASE="${TEST%.expected}"
+
+    echo -n "$BASE ... "
+    (
+        . "${BASE}.env"
+        . ./mo "${BASE}.template"
+    ) | diff -wU5 - "${TEST}" > "${BASE}.diff"
+
+    if [[ $? -ne 0 ]]; then
+        echo "FAIL"
+        FAIL=$(( $FAIL + 1 ))
+    else
+        echo "ok"
+        PASS=$(( $PASS + 1 ))
+        rm "${BASE}.diff"
+    fi
+done
+
+echo ""
+echo "Pass:  $PASS"
+echo "Fail: $FAIL"
+[[ $FAIL -gt 0 ]] && exit 1
