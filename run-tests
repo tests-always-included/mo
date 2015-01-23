@@ -9,7 +9,7 @@ for TEST in tests/*.expected; do
     BASE="${TEST%.expected}"
 
     echo -n "$BASE ... "
-    (
+    echo "Do not read this input" | (
         . "${BASE}.env"
         . ./mo "${BASE}.template"
     ) | diff -wU5 - "${TEST}" > "${BASE}.diff"
