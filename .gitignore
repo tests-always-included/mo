@@ -1,2 +1,4 @@
 *.swp
 tests/*.diff
+spec-script
+spec-template

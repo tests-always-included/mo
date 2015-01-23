@@ -27,6 +27,8 @@ Requirements
 * The "coreutils" package (`basename` and `cat`)
 * ... that's it.  Why?  Because bash **can**!
 
+If you intend to develop this and run the official specs, you also need node.js.
+
 
 Concessions
 -----------
@@ -45,6 +47,8 @@ Developing
 ----------
 
 Check out the code and hack away.  Please add tests to show off bugs before fixing them.  New functionality should also be covered by a test.
+
+To run against the official specs, you need to make sure you have the "spec" submodule.  If you see a `spec/` folder with stuff in it, you're already set.  Otherwise run `git submodule update --init`.  After that you need to install node.js and run `npm install async` (no, I didn't make a package.json to just list one dependency).  Finally, `./run-spec.js spec/specs/*.json` will run against the official tests - there's over 100 of them.
 
 
 License
