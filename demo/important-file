@@ -1,5 +1,7 @@
 #!/bin/bash
 
+cd "$(dirname "$0")"/..
+
 date-string() { date; }
 wrapper() { echo -n "*** $1 ***"; }
 
