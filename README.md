@@ -38,6 +38,7 @@ I admit that implementing everything in bash just doesn't make a lot of sense.  
 * HTML encoding is not built into `mo`.  The `{{{...}}}` and `{{...}}` tags both work.  `echo '{{TEST}}' | TEST='<b>' mo` will give you "`<b>`" instead of "`&gt;b&lt;`".
 * You must make sure the data is in the environment when `mo` runs.  The easiest way to do that is to source `mo` in your shell script after setting up lots of other environment variables / functions.
 * Associative arrays are not addressable via their index.  You can't use `{{VARIABLE_NAME.INDEX_NAME}}` and expect it to work.  Associative arrays aren't supported in Bash 3.
+* Changing the delimiters.  Really this could be done, but I often don't have the need to do this.  File an issue or submit a pull request if this is something ou'd really like to see.
 
 
 Developing
