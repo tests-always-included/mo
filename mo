@@ -104,8 +104,7 @@ mustache-parse() {
                 # Execute in subshell to preserve current cwd
                 (
                     cd "$(dirname "$MUSTACHE_TAG")"
-                    MUSTACHE_TAG=$(basename "$MUSTACHE_TAG")
-                    MUSTACHE_TAG=$(cat "$MUSTACHE_TAG" 2>/dev/null)
+                    mustache-load-file MUSTACHE_TAG "${MUSTACHE_TAG##*/}"
                     mustache-parse MUSTACHE_TAG "$MUSTACHE_TAG" "" "$MUSTACHE_CURRENT"
                     echo -n $MUSTACHE_TAG
                 )
@@ -339,15 +338,31 @@ mustache-get-content() {
         CONTENT=""
 
         for FILENAME in ${1+"$@"}; do
+            # This is so relative paths work from inside template files
             CONTENT="$CONTENT"'{{>'"$FILENAME"'}}'
         done
     else
-        # Workaround to avoid newlines being gobbled by the subshell
-        CONTENT="$(cat -; echo .)"
-        CONTENT=${CONTENT:0: -1}
+        mustache-load-file CONTENT /dev/stdin
     fi
 
     local "$TARGET" && mustache-indirect "$TARGET" "$CONTENT"
+}
+
+
+# Read a file
+#
+# Parameters:
+#     $1: Variable name to receive the file's content
+#     $2: Filename to load
+mustache-load-file() {
+    local CONTENT
+
+    # The subshell removes any trailing newlines.  We forcibly add
+    # a dot to the content to preserve all newlines.
+    CONTENT="$(cat $2; echo '.')"
+    CONTENT="${CONTENT:0: -1}"  # Remove last dot
+
+    local "$1" && mustache-indirect "$1" "$CONTENT"
 }
 
 
