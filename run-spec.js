@@ -158,7 +158,7 @@ function processSpecFile(specFile, done) {
 
 // 0 = node, 1 = script, 2 = file
 if (process.argv.length < 3) {
-    console.log('Specify spec files on the command line');
+    console.log('Specify one or more JSON spec files on the command line');
     process.exit();
 }
 
