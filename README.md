@@ -64,6 +64,9 @@ To run against the official specs, you need to make sure you have the "spec" sub
 
 It is acceptable for some of the official spec tests to fail.  Anything dealing with multiple levels of objects (eg. `{{a.b.c}}`) and changing the delimiters (`{{= | | =}}` will fail.  Other than that, this bash implementation of the mustache spec should pass tests.
 
+Specific issues:
+ * Interpolation - Multiple Calls:  This fails because lambdas execute in a subshell so their output can be captured.  This is flagged as a TODO in the code.
+
 
 ### Future Enhancements
 
