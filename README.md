@@ -33,14 +33,23 @@ If you intend to develop this and run the official specs, you also need node.js.
 Concessions
 -----------
 
-I admit that implementing everything in bash just doesn't make a lot of sense.  For example, the following things just don't work.
+I admit that implementing everything in bash just doesn't make a lot of sense.  For example, the following things just don't work because they don't really mesh with the "bash way".
 
+Pull requests to solve the following issues would be helpful.
+
+### Mustache Syntax
+
+* Dotted names are not supported and this means associative arrays are not addressable via their index.  Partly this is because our target (Bash 3) does not support associative arrays.
+* There's no "top level" object, so `echo '{.}' | ./mo` does not do anything useful.  In other languages you can say the data for the template is a string and in `mo` the data is always the environment.  Luckily this type of usage is rate and `{.}` works great when iterating over an array.
+* HTML encoding is not built into `mo`.  `{{{var}}}`, `{{&var}}` and `{{var}}` all do the same thing.  `echo '{{TEST}}' | TEST='<b>' mo` will give you "`<b>`" instead of "`&gt;b&lt;`".
+* You can not change the delimiters.
+
+
+### General Scripting Issues
+
+* Using binary files as templates is simply not allowed.
 * Bash does not support nested structures like fancy objects.  The best you can do are arrays.  I'm not able to add super complex structures to bash - it's just a shell after all!
-* There's no "top level" object that `{.}` refers to in `mo`.  In other languages you can say the data for the template is a string.  That's ok because using `{.}` when processing a top level scope is rare.  Using `{.}` works great when iterating over an array.
-* HTML encoding is not built into `mo`.  The `{{{...}}}` and `{{...}}` tags both work.  `echo '{{TEST}}' | TEST='<b>' mo` will give you "`<b>`" instead of "`&gt;b&lt;`".
 * You must make sure the data is in the environment when `mo` runs.  The easiest way to do that is to source `mo` in your shell script after setting up lots of other environment variables / functions.
-* Associative arrays are not addressable via their index.  You can't use `{{VARIABLE_NAME.INDEX_NAME}}` and expect it to work.  Associative arrays aren't supported in Bash 3.
-* Changing the delimiters.  Really this could be done, but I often don't have the need to do this.  File an issue or submit a pull request if this is something ou'd really like to see.
 
 
 Developing
@@ -49,6 +58,16 @@ Developing
 Check out the code and hack away.  Please add tests to show off bugs before fixing them.  New functionality should also be covered by a test.
 
 To run against the official specs, you need to make sure you have the "spec" submodule.  If you see a `spec/` folder with stuff in it, you're already set.  Otherwise run `git submodule update --init`.  After that you need to install node.js and run `npm install async` (no, I didn't make a package.json to just list one dependency).  Finally, `./run-spec.js spec/specs/*.json` will run against the official tests - there's over 100 of them.
+
+
+### Failed Specs
+
+It is acceptable for some of the official spec tests to fail.  Anything dealing with multiple levels of objects (eg. `{{a.b.c}}`) and changing the delimiters (`{{= | | =}}` will fail.  Other than that, this bash implementation of the mustache spec should pass tests.
+
+
+### Future Enhancements
+
+There's a few places in the code marked with `TODO` to signify areas that could use improvement.  Care to help?  Keep in mind that this uses bash exclusively, so it might not look the prettiest.
 
 
 License
