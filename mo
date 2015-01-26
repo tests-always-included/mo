@@ -31,14 +31,14 @@ mustache-is-function() {
 mustache-loop() {
     local CONTENT DEST_NAME END_TAG MODIFIED_CONTENT
 
-    DEST_NAME="$1"
-    CONTENT="$2"
-    END_TAG="$3"
+    DEST_NAME=$1
+    CONTENT=$2
+    END_TAG=$3
     shift 3
 
     # This MUST loop at least once or assignment back to ${!DEST_NAME}
     # will not work.
-    while [[ ${#@} -gt 0 ]]; do
+    while [[ "${#@}" -gt 0 ]]; do
         mustache-parse MODIFIED_CONTENT "$CONTENT" "$END_TAG" "$1" false
         shift
     done
@@ -60,17 +60,17 @@ mustache-parse() {
     # used in the string replacements
     local MUSTACHE_CONTENT MUSTACHE_CURRENT MUSTACHE_END_TAG MUSTACHE_IS_BEGINNING MUSTACHE_TAG
 
-    MUSTACHE_END_TAG="$3"
-    MUSTACHE_CURRENT="$4"
-    MUSTACHE_IS_BEGINNING="$5"
+    MUSTACHE_END_TAG=$3
+    MUSTACHE_CURRENT=$4
+    MUSTACHE_IS_BEGINNING=$5
 
     # Find open tags
     mustache-split MUSTACHE_CONTENT "$2" '{{' '}}'
 
-    while [[ ${#MUSTACHE_CONTENT[@]} -gt 1 ]]; do
+    while [[ "${#MUSTACHE_CONTENT[@]}" -gt 1 ]]; do
         mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_CONTENT[1]}"
 
-        case "$MUSTACHE_TAG" in
+        case $MUSTACHE_TAG in
             '#'*)
                 # Loop, if/then, or pass content through function
                 # Sets context
@@ -107,16 +107,17 @@ mustache-parse() {
 
                 # Execute in subshell to preserve current cwd
                 (
+                    # TODO:  Remove dirname and use a function instead
                     cd "$(dirname "$MUSTACHE_TAG")"
                     mustache-load-file MUSTACHE_TAG "${MUSTACHE_TAG##*/}"
-                    mustache-parse MUSTACHE_TAG "$MUSTACHE_TAG" "" "$MUSTACHE_CURRENT" false
+                    mustache-parse MUSTACHE_TAG "$MUSTACHE_TAG" "" "$MUSTACHE_CURRENT" true
                     echo -n $MUSTACHE_TAG
                 )
                 ;;
 
             '/'*)
                 # Closing tag - If we hit MUSTACHE_END_TAG, we're done.
-                mustache-standalone-denied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
+                mustache-standalone-allowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
                 mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
 
                 if [[ "$MUSTACHE_TAG" == "$MUSTACHE_END_TAG" ]]; then
@@ -167,7 +168,7 @@ mustache-parse() {
                 MUSTACHE_CONTENT="${MUSTACHE_TAG:1}"'}}'"$MUSTACHE_CONTENT"
                 mustache-split MUSTACHE_CONTENT "$MUSTACHE_CONTENT" '}}}'
                 mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_CONTENT[0]}"
-                MUSTACHE_CONTENT="${MUSTACHE_CONTENT[1]}"
+                MUSTACHE_CONTENT=${MUSTACHE_CONTENT[1]}
 
                 # Now show the value
                 mustache-show "$MUSTACHE_TAG"
@@ -242,7 +243,7 @@ mustache-is-standalone() {
 
     mustache-trim-chars BEFORE_TRIMMED "$2" false true " " "$'\t'"
     mustache-trim-chars AFTER_TRIMMED "$3" true false " " "$'\t'"
-    CHAR="${BEFORE_TRIMMED: -1}"
+    CHAR=${BEFORE_TRIMMED: -1}
 
     if [[ "$CHAR" != $'\n' ]] && [[ "$CHAR" != $'\r' ]]; then
         if [[ ! -z "$CHAR" ]] || ! $4; then
@@ -250,16 +251,17 @@ mustache-is-standalone() {
         fi
     fi
 
-    CHAR="${AFTER_TRIMMED:0:1}"
+    CHAR=${AFTER_TRIMMED:0:1}
 
     if [[ "$CHAR" != $'\n' ]] && [[ "$CHAR" != $'\r' ]] && [[ ! -z "$CHAR" ]]; then
         return 2;
     fi
 
-    # TODO - peek ahead and see if the newline (if ! -z $CHAR) is CR + LF
-    # TODO - fix returned value if $CHAR is empty string
+    if [[ "$CHAR" == $'\r' ]] && [[ "${AFTER_TRIMMED:1:1}" == $'\n' ]]; then
+        CHAR="$CHAR"$'\n'
+    fi
 
-    local "$1" && mustache-indirect "$1" "$((${#BEFORE_TRIMMED})) $((${#3} + 1 - ${#AFTER_TRIMMED}))"
+    local "$1" && mustache-indirect "$1" "$((${#BEFORE_TRIMMED})) $((${#3} + ${#CHAR} - ${#AFTER_TRIMMED}))"
 }
 
 
@@ -272,7 +274,6 @@ mustache-is-standalone() {
 #     $3: Tag content (not used)
 #     $4: Content after the tag
 mustache-standalone-denied() {
-    # TODO
     echo -n "$2"
     local "$1" && mustache-indirect "$1" "$4"
 }
@@ -308,7 +309,7 @@ mustache-test() {
 
     if mustache-is-array "$1"; then
         # Arrays must have at least 1 element
-        eval '[[ ${#'"$1"'} -gt 0 ]]' && return 0
+        eval '[[ "${#'"$1"'}" -gt 0 ]]' && return 0
     else
         # Environment variables must not be empty
         [[ ! -z "${!1}" ]] && return 0
@@ -344,10 +345,10 @@ mustache-is-array() {
 mustache-trim-chars() {
     local BACK CURRENT FRONT LAST TARGET VAR
 
-    TARGET="$1"
-    CURRENT="$2"
-    FRONT="$3"
-    BACK="$4"
+    TARGET=$1
+    CURRENT=$2
+    FRONT=$3
+    BACK=$4
     LAST=""
     shift # Remove target
     shift # Remove string
@@ -355,7 +356,7 @@ mustache-trim-chars() {
     shift # Remove trim end flag
 
     while [[ "$CURRENT" != "$LAST" ]]; do
-        LAST="$CURRENT"
+        LAST=$CURRENT
 
         for VAR in "$@"; do
             $FRONT && CURRENT="${CURRENT/#$VAR}"
@@ -393,15 +394,15 @@ mustache-split() {
     RESULT=( "$2" )
     mustache-find-string POS "${RESULT[0]}" "$3"
 
-    if [[ $POS -ne -1 ]]; then
+    if [[ "$POS" -ne -1 ]]; then
         # The first delimiter was found
-        RESULT[1]="${RESULT[0]:$POS + ${#3}}"
-        RESULT[0]="${RESULT[0]:0:$POS}"
+        RESULT[1]=${RESULT[0]:$POS + ${#3}}
+        RESULT[0]=${RESULT[0]:0:$POS}
 
         if [[ ! -z "$4" ]]; then
             mustache-find-string POS "${RESULT[1]}" "$4"
 
-            if [[ $POS -ne -1 ]]; then
+            if [[ "$POS" -ne -1 ]]; then
                 # The second delimiter was found
                 RESULT[2]="${RESULT[1]:$POS + ${#4}}"
                 RESULT[1]="${RESULT[1]:0:$POS}"
@@ -421,7 +422,7 @@ mustache-split() {
 mustache-find-string() {
     local POS STRING
 
-    STRING="${2%%$3*}"
+    STRING=${2%%$3*}
     [[ "$STRING" == "$2" ]] && POS=-1 || POS=${#STRING}
     local "$1" && mustache-indirect "$1" $POS
 }
@@ -458,9 +459,9 @@ mustache-indirect-array() {
 mustache-get-content() {
     local CONTENT FILENAME TARGET
 
-    TARGET="$1"
+    TARGET=$1
     shift
-    if [[ ${#@} -gt 0 ]]; then
+    if [[ "${#@}" -gt 0 ]]; then
         CONTENT=""
 
         for FILENAME in ${1+"$@"}; do
@@ -485,8 +486,9 @@ mustache-load-file() {
 
     # The subshell removes any trailing newlines.  We forcibly add
     # a dot to the content to preserve all newlines.
-    CONTENT="$(cat $2; echo '.')"
-    CONTENT="${CONTENT:0: -1}"  # Remove last dot
+    # TODO: remove cat and replace with read loop?
+    CONTENT=$(cat $2; echo '.')
+    CONTENT=${CONTENT:0: -1}  # Remove last dot
 
     local "$1" && mustache-indirect "$1" "$CONTENT"
 }
