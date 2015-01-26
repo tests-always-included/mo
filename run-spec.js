@@ -4,7 +4,10 @@ var async, exec, fs, summary, specFiles;
 
 function makeShellString(value) {
     if (typeof value === 'string') {
-        return JSON.stringify(value);
+        // Newlines are tricky
+        return value.split(/\n/).map(function (chunk) {
+            return JSON.stringify(chunk);
+        }).join('"\n"');
     }
 
     if (typeof value === 'number') {
