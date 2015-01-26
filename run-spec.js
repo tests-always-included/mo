@@ -29,6 +29,19 @@ function addToEnvironment(name, value) {
         return name + '=' + result.join(' ');
     }
 
+    // Sometimes the __tag__ property of the code in the lambdas may
+    // be missing.  :-(
+    if (typeof value === 'object') {
+        if (value.__tag__ === 'code' || (value.ruby && value.php && value.perl)) {
+            if (value.bash) {
+                return name + '() { ' + value.bash + '; }';
+            }
+
+            return name + '() { perl -e \'print ((' + value.perl + ')->("\'"$1"\'"))\'; }';
+        }
+    }
+
+
     if (typeof value === 'object') {
         return '# ' + name + ' is an object and will not work in bash';
     }
@@ -45,26 +58,41 @@ function addToEnvironment(name, value) {
 }
 
 function runTest(test, done) {
-    var output, script;
+    var output, partials, script;
 
     script = [
         '#!/bin/bash'
     ];
+    partials = test.partials || {};
 
     Object.keys(test.data).forEach(function (name) {
         script.push(addToEnvironment(name, test.data[name]));
     });
-    script.push('. mo spec-template');
+    script.push('. mo spec-runner/spec-template');
     test.script = script.join('\n');
     async.series([
         function (taskDone) {
-            fs.writeFile('spec-script', test.script, taskDone);
+            fs.mkdir("spec-runner/", function (err) {
+                if (err && err.code !== 'EEXIST') {
+                    return taskDone(err);
+                }
+
+                taskDone();
+            });
         },
         function (taskDone) {
-            fs.writeFile('spec-template', test.template, taskDone);
+            fs.writeFile('spec-runner/spec-script', test.script, taskDone);
         },
         function (taskDone) {
-            exec('bash spec-script', function (err, stdout) {
+            fs.writeFile('spec-runner/spec-template', test.template, taskDone);
+        },
+        function (taskDone) {
+            async.eachSeries(Object.keys(partials), function (partialName, partialDone) {
+                fs.writeFile('spec-runner/' + partialName, test.partials[partialName], partialDone);
+            }, taskDone);
+        },
+        function (taskDone) {
+            exec('bash spec-runner/spec-script', function (err, stdout) {
                 if (err) {
                     return taskDone(err);
                 }
@@ -74,10 +102,18 @@ function runTest(test, done) {
             });
         },
         function (taskDone) {
-            fs.unlink('spec-script', taskDone);
+            async.eachSeries(Object.keys(partials), function (partialName, partialDone) {
+                fs.unlink('spec-runner/' + partialName, partialDone);
+            }, taskDone);
         },
         function (taskDone) {
-            fs.unlink('spec-template', taskDone);
+            fs.unlink('spec-runner/spec-script', taskDone);
+        },
+        function (taskDone) {
+            fs.unlink('spec-runner/spec-template', taskDone);
+        },
+        function (taskDone) {
+            fs.rmdir('spec-runner/', taskDone);
         }
     ], function (err) {
         if (err) {
