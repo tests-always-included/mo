@@ -100,7 +100,7 @@ mustache-find-end-tag() {
 
                 if [[ "$TAG" == "$3" ]]; then
                     # Found our end tag
-                    if [[ -z "$4" ]] && mustache-is-standalone STANDALONE_BYTES "$SCANNED" "${CONTENT[2]}" false; then
+                    if [[ -z "$4" ]] && mustache-is-standalone STANDALONE_BYTES "$SCANNED" "${CONTENT[2]}" true; then
                         # This is also a standalone tag - clean up whitespace
                         STANDALONE_BYTES=( $STANDALONE_BYTES )
                         SCANNED="${SCANNED:0:${STANDALONE_BYTES[0]}}"
@@ -163,6 +163,9 @@ mustache-parse() {
                 if mustache-test "$MUSTACHE_TAG"; then
                     # Show / loop / pass through function
                     if mustache-is-function "$MUSTACHE_TAG"; then
+                        # TODO: Consider piping the output to
+                        # mustache-get-content so the lambda does not
+                        # execute in a subshell?
                         MUSTACHE_CONTENT=$($MUSTACHE_TAG "${MUSTACHE_BLOCK[0]}")
                         mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "$MUSTACHE_CURRENT" false
                         MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
@@ -178,19 +181,7 @@ mustache-parse() {
 
             '>'*)
                 # Load partial - get name of file relative to cwd
-                # TODO: Should be somewhat standalone.  Indentation should
-                # be applied to entire partial
-                mustache-standalone-denied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
-                mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
-
-                # Execute in subshell to preserve current cwd
-                (
-                    # TODO:  Remove dirname and use a function instead
-                    cd "$(dirname "$MUSTACHE_TAG")"
-                    mustache-load-file MUSTACHE_TAG "${MUSTACHE_TAG##*/}"
-                    mustache-parse MUSTACHE_TAG "$MUSTACHE_TAG" "$MUSTACHE_CURRENT" true
-                    echo -n $MUSTACHE_TAG
-                )
+                mustache-partial MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING "$MUSTACHE_CURRENT"
                 ;;
 
             '/'*)
@@ -207,7 +198,7 @@ mustache-parse() {
                 mustache-full-tag-name MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
 
                 if ! mustache-test "$MUSTACHE_TAG"; then
-                    mustache-parse MUSTACHE_CONTENT "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false
+                    mustache-parse MUSTACHE_CONTENT "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false "$MUSTACHE_CURRENT"
                 fi
 
                 MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
@@ -267,6 +258,101 @@ mustache-parse() {
 
     echo -n "${MUSTACHE_CONTENT[0]}"
     local "$1" && mustache-indirect "$1" ""
+}
+
+
+# Process a partial
+#
+# Indentation should be applied to the entire partial
+#
+# Prefix all variables
+#
+# Parameters:
+#     $1: Name of destination "content" variable.
+#     $2: Content before the tag that was not yet written
+#     $3: Tag content
+#     $4: Content after the tag
+#     $5: true/false: is this the beginning of the content?
+#     $6: Current context name
+mustache-partial() {
+    local MUSTACHE_CONTENT MUSTACHE_FILENAME MUSTACHE_INDENT MUSTACHE_LINE MUSTACHE_PARTIAL MUSTACHE_STANDALONE
+
+    if mustache-is-standalone MUSTACHE_STANDALONE "$2" "$4" $5; then
+        MUSTACHE_STANDALONE=( $MUSTACHE_STANDALONE )
+        echo -n "${2:0:${MUSTACHE_STANDALONE[0]}}"
+        MUSTACHE_INDENT=${2:${MUSTACHE_STANDALONE[0]}}
+        MUSTACHE_CONTENT=${4:${MUSTACHE_STANDALONE[1]}}
+    else
+        MUSTACHE_INDENT=""
+        echo -n "$2"
+        MUSTACHE_CONTENT=$4
+    fi
+
+    mustache-trim-whitespace MUSTACHE_FILENAME "${3:1}"
+
+    # Execute in subshell to preserve current cwd and environment
+    (
+        # TODO:  Remove dirname and use a function instead
+        cd "$(dirname "$MUSTACHE_FILENAME")"
+        mustache-indent-lines MUSTACHE_PARTIAL "$MUSTACHE_INDENT" "$(
+            mustache-load-file MUSTACHE_PARTIAL "${MUSTACHE_FILENAME##*/}"
+
+            # Fix bash handling of subshells
+            # The extra dot is removed in mustache-indent-lines
+            echo -n "${MUSTACHE_PARTIAL}."
+        )"
+        mustache-parse MUSTACHE_PARTIAL "$MUSTACHE_PARTIAL" "$6" true
+        echo -n "$MUSTACHE_PARTIAL"
+    )
+
+    local "$1" && mustache-indirect "$1" "$MUSTACHE_CONTENT"
+}
+
+
+# Indent a string, placing the indent at the beginning of every
+# line that has any content.
+#
+# Parameters:
+#     $1: Name of destination variable to get an array of lines
+#     $2: The indent string
+#     $3: The string to reindent
+mustache-indent-lines() {
+    local CONTENT FRAGMENT POS_N POS_R RESULT TRIMMED
+
+    RESULT=""
+    CONTENT="${3:0: -1}" # Remove newline and dot from workaround - in mustache-partial
+    mustache-find-string POS_N "$CONTENT" $'\n'
+    mustache-find-string POS_R "$CONTENT" $'\r'
+
+    while [[ "$POS_N" -gt -1 ]] || [[ "$POS_R" -gt -1 ]]; do
+        if [[ "$POS_N" -gt -1 ]]; then
+            FRAGMENT="${CONTENT:0:$POS_N + 1}"
+            CONTENT=${CONTENT:$POS_N + 1}
+        else
+            FRAGMENT="${CONTENT:0:$POS_R + 1}"
+            CONTENT=${CONTENT:$POS_R + 1}
+        fi
+
+        mustache-trim-chars TRIMMED "$FRAGMENT" false true " " "$'\t'" "$'\n'" "$'\r'"
+
+        if [ ! -z "$TRIMMED" ]; then
+            FRAGMENT="$2$FRAGMENT"
+        fi
+
+        RESULT="$RESULT$FRAGMENT"
+        mustache-find-string POS_N "$CONTENT" $'\n'
+        mustache-find-string POS_R "$CONTENT" $'\r'
+    done
+
+    mustache-trim-chars TRIMMED "$CONTENT" false true " " "$'\t'"
+
+    if [ ! -z "$TRIMMED" ]; then
+        CONTENT="$2$CONTENT"
+    fi
+
+    RESULT="$RESULT$CONTENT"
+
+    local "$1" && mustache-indirect "$1" "$RESULT"
 }
 
 
