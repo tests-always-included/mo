@@ -66,6 +66,7 @@ It is acceptable for some of the official spec tests to fail.  Anything dealing 
 
 Specific issues:
  * Interpolation - Multiple Calls:  This fails because lambdas execute in a subshell so their output can be captured.  This is flagged as a TODO in the code.
+ * HTML Escaping - Since bash is not often executed in a web server context, it makes no sense to have the output escaped as HTML.  Performing shell escaping of variables may be an option in the future if there's a demand.
 
 
 ### Future Enhancements
