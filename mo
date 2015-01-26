@@ -36,7 +36,7 @@ mustache-loop() {
 
     while [[ "${#@}" -gt 0 ]]; do
         mustache-full-tag-name CONTEXT "$CONTEXT_BASE" "$1"
-        mustache-parse IGNORE "$CONTENT" "" "$CONTEXT" false
+        mustache-parse IGNORE "$CONTENT" "$CONTEXT" false
         shift
     done
 }
@@ -135,17 +135,15 @@ mustache-find-end-tag() {
 # Parameters:
 #     $1: Where to store content left after parsing
 #     $2: Block of text to change
-#     $3: Stop at this closing tag  (eg "/NAME")
-#     $4: Current name (the variable NAME for what {{.}} means)
-#     $5: true when no content before this, false otherwise
+#     $3: Current name (the variable NAME for what {{.}} means)
+#     $4: true when no content before this, false otherwise
 mustache-parse() {
     # Keep naming variables MUSTACHE_* here to not overwrite needed variables
     # used in the string replacements
-    local MUSTACHE_BLOCK MUSTACHE_CONTENT MUSTACHE_CURRENT MUSTACHE_END_TAG MUSTACHE_IS_BEGINNING MUSTACHE_TAG
+    local MUSTACHE_BLOCK MUSTACHE_CONTENT MUSTACHE_CURRENT MUSTACHE_IS_BEGINNING MUSTACHE_TAG
 
-    MUSTACHE_END_TAG=$3
-    MUSTACHE_CURRENT=$4
-    MUSTACHE_IS_BEGINNING=$5
+    MUSTACHE_CURRENT=$3
+    MUSTACHE_IS_BEGINNING=$4
 
     # Find open tags
     mustache-split MUSTACHE_CONTENT "$2" '{{' '}}'
@@ -166,12 +164,12 @@ mustache-parse() {
                     # Show / loop / pass through function
                     if mustache-is-function "$MUSTACHE_TAG"; then
                         MUSTACHE_CONTENT=$($MUSTACHE_TAG "${MUSTACHE_BLOCK[0]}")
-                        mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "" "$MUSTACHE_CURRENT" false
+                        mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "$MUSTACHE_CURRENT" false
                         MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
                     elif mustache-is-array "$MUSTACHE_TAG"; then
                         eval 'mustache-loop "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_TAG" "${!'"$MUSTACHE_TAG"'[@]}"'
                     else
-                        mustache-parse MUSTACHE_CONTENT "${MUSTACHE_BLOCK[0]}" "" "$MUSTACHE_CURRENT" false
+                        mustache-parse MUSTACHE_CONTENT "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false
                     fi
                 fi
 
@@ -190,7 +188,7 @@ mustache-parse() {
                     # TODO:  Remove dirname and use a function instead
                     cd "$(dirname "$MUSTACHE_TAG")"
                     mustache-load-file MUSTACHE_TAG "${MUSTACHE_TAG##*/}"
-                    mustache-parse MUSTACHE_TAG "$MUSTACHE_TAG" "" "$MUSTACHE_CURRENT" true
+                    mustache-parse MUSTACHE_TAG "$MUSTACHE_TAG" "$MUSTACHE_CURRENT" true
                     echo -n $MUSTACHE_TAG
                 )
                 ;;
@@ -209,7 +207,7 @@ mustache-parse() {
                 mustache-full-tag-name MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
 
                 if ! mustache-test "$MUSTACHE_TAG"; then
-                    mustache-parse MUSTACHE_CONTENT "${MUSTACHE_BLOCK[0]}" "" "$MUSTACHE_CURRENT" false
+                    mustache-parse MUSTACHE_CONTENT "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false
                 fi
 
                 MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
@@ -366,7 +364,7 @@ mustache-show() {
 
     if mustache-is-function "$1"; then
         CONTENT=$($1 "")
-        mustache-parse CONTENT "$CONTENT" "" "$2" false
+        mustache-parse CONTENT "$CONTENT" "$2" false
         return 0
     fi
 
@@ -591,4 +589,4 @@ mustache-load-file() {
 MUSTACHE_FUNCTIONS=$(declare -F)
 MUSTACHE_FUNCTIONS=( ${MUSTACHE_FUNCTIONS//declare -f /} )
 mustache-get-content MUSTACHE_CONTENT ${1+"$@"}
-mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "" "" true
+mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "" true
