@@ -24,26 +24,109 @@ mustache-is-function() {
 # Process a chunk of content some number of times.
 #
 # Parameters:
-#     $1: Destination variable name for the modified content
-#     $2: Content to parse and reparse and reparse
-#     $3: Ending tag for the parser
-#     $4-*: Values to insert into the parsed content
+#     $1: Content to parse and reparse and reparse
+#     $2: Tag prefix (context name)
+#     $3-*: Names to insert into the parsed content
 mustache-loop() {
-    local CONTENT DEST_NAME END_TAG MODIFIED_CONTENT
+    local CONTENT CONTEXT CONTEXT_BASE IGNORE
 
-    DEST_NAME=$1
-    CONTENT=$2
-    END_TAG=$3
-    shift 3
+    CONTENT=$1
+    CONTEXT_BASE=$2
+    shift 2
 
-    # This MUST loop at least once or assignment back to ${!DEST_NAME}
-    # will not work.
     while [[ "${#@}" -gt 0 ]]; do
-        mustache-parse MODIFIED_CONTENT "$CONTENT" "$END_TAG" "$1" false
+        mustache-full-tag-name CONTEXT "$CONTEXT_BASE" "$1"
+        mustache-parse IGNORE "$CONTENT" "" "$CONTEXT" false
         shift
     done
+}
 
-    local "$DEST_NAME" && mustache-indirect "$DEST_NAME" "$MODIFIED_CONTENT"
+
+# Return a dotted name based on current context and target name
+#
+# Parameters:
+#     $1: Target variable to store results
+#     $2: Context name
+#     $3: Desired variable name
+mustache-full-tag-name() {
+    if [[ -z "$2" ]]; then
+        local "$1" && mustache-indirect "$1" "$3"
+    else
+        local "$1" && mustache-indirect "$1" "${2}.${3}"
+    fi
+}
+
+
+# Eat content until the right end tag is found.  Returns an array with the
+# following members:
+#     [0] = Content before end tag
+#     [1] = End tag (complete tag)
+#     [2] = Content after end tag
+#
+# Everything using this function uses the "standalone tags" logic.
+#
+# Parameters:
+#     $1: Where to store the array
+#     $2: Content
+#     $3: Name of end tag
+#     $4: If -z, do standalone tag processing before finishing
+mustache-find-end-tag() {
+    local CONTENT SCANNED
+
+    # Find open tags
+    SCANNED=""
+    mustache-split CONTENT "$2" '{{' '}}'
+
+    while [[ "${#CONTENT[@]}" -gt 1 ]]; do
+        mustache-trim-whitespace TAG "${CONTENT[1]}"
+        
+        # Restore CONTENT[1] before we start using it
+        CONTENT[1]='{{'"${CONTENT[1]}"'}}'
+
+        case $TAG in
+            '#'* | '^'*)
+                # Start another block
+                SCANNED="${SCANNED}${CONTENT[0]}${CONTENT[1]}"
+                mustache-trim-whitespace TAG "${TAG:1}"
+                mustache-find-end-tag CONTENT "${CONTENT[2]}" "$TAG" "loop"
+                SCANNED="${SCANNED}${CONTENT[0]}${CONTENT[1]}"
+                CONTENT=${CONTENT[2]}
+                ;;
+
+            '/'*)
+                # End a block - could be ours
+                mustache-trim-whitespace TAG "${TAG:1}"
+                SCANNED="$SCANNED${CONTENT[0]}"
+
+                if [[ "$TAG" == "$3" ]]; then
+                    # Found our end tag
+                    if [[ -z "$4" ]] && mustache-is-standalone STANDALONE_BYTES "$SCANNED" "${CONTENT[2]}" false; then
+                        # This is also a standalone tag - clean up whitespace
+                        STANDALONE_BYTES=( $STANDALONE_BYTES )
+                        SCANNED="${SCANNED:0:${STANDALONE_BYTES[0]}}"
+                        CONTENT[2]="${CONTENT[2]:${STANDALONE_BYTES[1]}}"
+                    fi
+
+                    local "$1" && mustache-indirect-array "$1" "$SCANNED" "${CONTENT[1]}" "${CONTENT[2]}"
+                    return 0
+                fi
+
+                SCANNED="$SCANNED${CONTENT[1]}"
+                CONTENT=${CONTENT[2]}
+                ;;
+
+            *)
+                # Ignore all other tags
+                SCANNED="${SCANNED}${CONTENT[0]}${CONTENT[1]}"
+                CONTENT=${CONTENT[2]}
+                ;;
+        esac
+
+        mustache-split CONTENT "$CONTENT" '{{' '}}'
+    done
+
+    # Did not find our closing tag
+    local "$1" && mustache-indirect-array "$1" "${SCANNED}" "" ""
 }
 
 
@@ -53,12 +136,12 @@ mustache-loop() {
 #     $1: Where to store content left after parsing
 #     $2: Block of text to change
 #     $3: Stop at this closing tag  (eg "/NAME")
-#     $4: Current value (what {{.}} will mean)
+#     $4: Current name (the variable NAME for what {{.}} means)
 #     $5: true when no content before this, false otherwise
 mustache-parse() {
     # Keep naming variables MUSTACHE_* here to not overwrite needed variables
     # used in the string replacements
-    local MUSTACHE_CONTENT MUSTACHE_CURRENT MUSTACHE_END_TAG MUSTACHE_IS_BEGINNING MUSTACHE_TAG
+    local MUSTACHE_BLOCK MUSTACHE_CONTENT MUSTACHE_CURRENT MUSTACHE_END_TAG MUSTACHE_IS_BEGINNING MUSTACHE_TAG
 
     MUSTACHE_END_TAG=$3
     MUSTACHE_CURRENT=$4
@@ -76,26 +159,23 @@ mustache-parse() {
                 # Sets context
                 mustache-standalone-allowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
                 mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
+                mustache-find-end-tag MUSTACHE_BLOCK "$MUSTACHE_CONTENT" "$MUSTACHE_TAG"
+                mustache-full-tag-name MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
 
                 if mustache-test "$MUSTACHE_TAG"; then
                     # Show / loop / pass through function
                     if mustache-is-function "$MUSTACHE_TAG"; then
-                        # This is slower - need to parse twice to avoid
-                        # subshells.  First, pass content to function but
-                        # the updated MUSTACHE_CONTENT is lost due to subshell.
-                        $MUSTACHE_TAG "$(mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "$MUSTACHE_TAG" "" false)"
-
-                        # Secondly, update MUSTACHE_CONTENT but do not output.
-                        mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "$MUSTACHE_TAG" "" false > /dev/null 2>&1
+                        MUSTACHE_CONTENT=$($MUSTACHE_TAG "${MUSTACHE_BLOCK[0]}")
+                        mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "" "$MUSTACHE_CURRENT" false
+                        MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
                     elif mustache-is-array "$MUSTACHE_TAG"; then
-                        eval 'mustache-loop MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "$MUSTACHE_TAG" "${'"$MUSTACHE_TAG"'[@]}"'
+                        eval 'mustache-loop "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_TAG" "${!'"$MUSTACHE_TAG"'[@]}"'
                     else
-                        mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "$MUSTACHE_TAG" "$(mustache-show "$MUSTACHE_TAG")" false
+                        mustache-parse MUSTACHE_CONTENT "${MUSTACHE_BLOCK[0]}" "" "$MUSTACHE_CURRENT" false
                     fi
-                else
-                    # Do not show
-                    mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "$MUSTACHE_TAG" false > /dev/null
                 fi
+
+                MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
                 ;;
 
             '>'*)
@@ -116,31 +196,23 @@ mustache-parse() {
                 ;;
 
             '/'*)
-                # Closing tag - If we hit MUSTACHE_END_TAG, we're done.
+                # Closing tag - If hit in this loop, we simply ignore
+                # Matching tags are found in mustache-find-end-tag
                 mustache-standalone-allowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
-                mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
-
-                if [[ "$MUSTACHE_TAG" == "$MUSTACHE_END_TAG" ]]; then
-                    # Tag hit - done
-                    local "$1" && mustache-indirect "$1" "$MUSTACHE_CONTENT"
-                    return 0
-                fi
-
-                # If the tag does not match, we ignore this tag
                 ;;
 
             '^'*)
                 # Display section if named thing does not exist
                 mustache-standalone-allowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
                 mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
+                mustache-find-end-tag MUSTACHE_BLOCK "$MUSTACHE_CONTENT" "$MUSTACHE_TAG"
+                mustache-full-tag-name MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
 
-                if mustache-test "$MUSTACHE_TAG"; then
-                    # Do not show
-                    mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "$MUSTACHE_TAG" "" false > /dev/null 2>&1
-                else
-                    # Show
-                    mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "$MUSTACHE_TAG" "" false
+                if ! mustache-test "$MUSTACHE_TAG"; then
+                    mustache-parse MUSTACHE_CONTENT "${MUSTACHE_BLOCK[0]}" "" "$MUSTACHE_CURRENT" false
                 fi
+
+                MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
                 ;;
 
             '!'*)
@@ -152,7 +224,7 @@ mustache-parse() {
             .)
                 # Current content (environment variable or function)
                 mustache-standalone-denied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
-                echo -n "$MUSTACHE_CURRENT"
+                mustache-show "$MUSTACHE_CURRENT" "$MUSTACHE_CURRENT"
                 ;;
 
             '=')
@@ -168,23 +240,26 @@ mustache-parse() {
                 MUSTACHE_CONTENT="${MUSTACHE_TAG:1}"'}}'"$MUSTACHE_CONTENT"
                 mustache-split MUSTACHE_CONTENT "$MUSTACHE_CONTENT" '}}}'
                 mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_CONTENT[0]}"
+                mustache-full-tag-name MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
                 MUSTACHE_CONTENT=${MUSTACHE_CONTENT[1]}
 
                 # Now show the value
-                mustache-show "$MUSTACHE_TAG"
+                mustache-show "$MUSTACHE_TAG" "$MUSTACHE_CURRENT"
                 ;;
 
             '&'*)
                 # Unescaped
                 mustache-standalone-denied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
                 mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
-                mustache-show "$MUSTACHE_TAG"
+                mustache-full-tag-name MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
+                mustache-show "$MUSTACHE_TAG" "$MUSTACHE_CURRENT"
                 ;;
 
             *)
                 # Normal environment variable or function call
                 mustache-standalone-denied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
-                mustache-show "$MUSTACHE_TAG"
+                mustache-full-tag-name MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
+                mustache-show "$MUSTACHE_TAG" "$MUSTACHE_CURRENT"
                 ;;
         esac
 
@@ -281,13 +356,27 @@ mustache-standalone-denied() {
 
 # Show an environment variable or the output of a function.
 #
+# Limit/prefix any variables used
+#
 # Parameters:
 #     $1: Name of environment variable or function
+#     $2: Current context
 mustache-show() {
+    local CONTENT MUSTACHE_NAME_PARTS
+
     if mustache-is-function "$1"; then
-        $1
-    else
+        CONTENT=$($1 "")
+        mustache-parse CONTENT "$CONTENT" "" "$2" false
+        return 0
+    fi
+
+    mustache-split MUSTACHE_NAME_PARTS "$1" "."
+    
+    if [[ -z "${MUSTACHE_NAME_PARTS[1]}" ]]; then
         echo -n "${!1}"
+    else
+        # Further subindexes are disallowed
+        eval 'echo -n "${'"${MUSTACHE_NAME_PARTS[0]}"'['"${MUSTACHE_NAME_PARTS[1]%%.*}"']}"'
     fi
 }
 
@@ -300,6 +389,7 @@ mustache-show() {
 #
 # Parameters:
 #     $1: Name of environment variable or function
+#     $2: Current value (our context)
 #
 # Return code:
 #     0 if the name is not empty, 1 otherwise
@@ -330,7 +420,10 @@ mustache-is-array() {
     local MUSTACHE_TEST
 
     MUSTACHE_TEST=$(declare -p "$1" 2>/dev/null) || return 1
-    [[ "${MUSTACHE_TEST:0:10}" == "declare -a" ]] || return 1
+    [[ "${MUSTACHE_TEST:0:10}" == "declare -a" ]] && return 0
+    [[ "${MUSTACHE_TEST:0:10}" == "declare -A" ]] && return 0
+
+    return 1
 }
 
 
