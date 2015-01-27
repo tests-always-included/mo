@@ -58,7 +58,9 @@ mustache-find-end-tag() {
                     # Found our end tag
                     if [[ -z "$4" ]] && mustache-is-standalone STANDALONE_BYTES "$SCANNED" "${CONTENT[2]}" true; then
                         # This is also a standalone tag - clean up whitespace
+                        # and move those whitespace bytes to the "tag" element
                         STANDALONE_BYTES=( $STANDALONE_BYTES )
+                        CONTENT[1]="${SCANNED:${STANDALONE_BYTES[0]}}${CONTENT[1]}${CONTENT[2]:0:${STANDALONE_BYTES[1]}}"
                         SCANNED="${SCANNED:0:${STANDALONE_BYTES[0]}}"
                         CONTENT[2]="${CONTENT[2]:${STANDALONE_BYTES[1]}}"
                     fi
@@ -82,6 +84,7 @@ mustache-find-end-tag() {
     done
 
     # Did not find our closing tag
+    SCANNED="$SCANNED${CONTENT[0]}"
     local "$1" && mustache-indirect-array "$1" "${SCANNED}" "" ""
 }
 
@@ -172,7 +175,7 @@ mustache-indent-lines() {
             CONTENT=${CONTENT:$POS_R + 1}
         fi
 
-        mustache-trim-chars TRIMMED "$FRAGMENT" false true " " "$'\t'" "$'\n'" "$'\r'"
+        mustache-trim-chars TRIMMED "$FRAGMENT" false true " " $'\t' $'\n' $'\r'
 
         if [ ! -z "$TRIMMED" ]; then
             FRAGMENT="$2$FRAGMENT"
@@ -183,7 +186,7 @@ mustache-indent-lines() {
         mustache-find-string POS_R "$CONTENT" $'\r'
     done
 
-    mustache-trim-chars TRIMMED "$CONTENT" false true " " "$'\t'"
+    mustache-trim-chars TRIMMED "$CONTENT" false true " " $'\t'
 
     if [ ! -z "$TRIMMED" ]; then
         CONTENT="$2$CONTENT"
@@ -278,8 +281,8 @@ mustache-is-function() {
 mustache-is-standalone() {
     local AFTER_TRIMMED BEFORE_TRIMMED CHAR
 
-    mustache-trim-chars BEFORE_TRIMMED "$2" false true " " "$'\t'"
-    mustache-trim-chars AFTER_TRIMMED "$3" true false " " "$'\t'"
+    mustache-trim-chars BEFORE_TRIMMED "$2" false true " " $'\t'
+    mustache-trim-chars AFTER_TRIMMED "$3" true false " " $'\t'
     CHAR=${BEFORE_TRIMMED: -1}
 
     if [[ "$CHAR" != $'\n' ]] && [[ "$CHAR" != $'\r' ]]; then
@@ -688,7 +691,7 @@ mustache-trim-chars() {
 mustache-trim-whitespace() {
     local RESULT
 
-    mustache-trim-chars RESULT "$2" true true "$'\r'" "$'\n'" "$'\t'" " "
+    mustache-trim-chars RESULT "$2" true true $'\r' $'\n' $'\t' " "
     local "$1" && mustache-indirect "$1" "$RESULT"
 }
 
