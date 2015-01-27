@@ -40,7 +40,7 @@ Pull requests to solve the following issues would be helpful.
 ### Mustache Syntax
 
 * Dotted names are not supported and this means associative arrays are not addressable via their index.  Partly this is because our target (Bash 3) does not support associative arrays.
-* There's no "top level" object, so `echo '{.}' | ./mo` does not do anything useful.  In other languages you can say the data for the template is a string and in `mo` the data is always the environment.  Luckily this type of usage is rate and `{.}` works great when iterating over an array.
+* There's no "top level" object, so `echo '{.}' | ./mo` does not do anything useful.  In other languages you can say the data for the template is a string and in `mo` the data is always the environment.  Luckily this type of usage is rare and `{.}` works great when iterating over an array.
 * HTML encoding is not built into `mo`.  `{{{var}}}`, `{{&var}}` and `{{var}}` all do the same thing.  `echo '{{TEST}}' | TEST='<b>' mo` will give you "`<b>`" instead of "`&gt;b&lt;`".
 * You can not change the delimiters.
 
