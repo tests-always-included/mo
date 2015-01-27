@@ -338,7 +338,7 @@ mustache-loop() {
 
     while [[ "${#@}" -gt 0 ]]; do
         mustache-full-tag-name CONTEXT "$CONTEXT_BASE" "$1"
-        mustache-parse IGNORE "$CONTENT" "$CONTEXT" false
+        mustache-parse "$CONTENT" "$CONTEXT" false
         shift
     done
 }
@@ -347,20 +347,19 @@ mustache-loop() {
 # Parse a block of text
 #
 # Parameters:
-#     $1: Where to store content left after parsing
-#     $2: Block of text to change
-#     $3: Current name (the variable NAME for what {{.}} means)
-#     $4: true when no content before this, false otherwise
+#     $1: Block of text to change
+#     $2: Current name (the variable NAME for what {{.}} means)
+#     $3: true when no content before this, false otherwise
 mustache-parse() {
     # Keep naming variables MUSTACHE_* here to not overwrite needed variables
     # used in the string replacements
     local MUSTACHE_BLOCK MUSTACHE_CONTENT MUSTACHE_CURRENT MUSTACHE_IS_BEGINNING MUSTACHE_TAG
 
-    MUSTACHE_CURRENT=$3
-    MUSTACHE_IS_BEGINNING=$4
+    MUSTACHE_CURRENT=$2
+    MUSTACHE_IS_BEGINNING=$3
 
     # Find open tags
-    mustache-split MUSTACHE_CONTENT "$2" '{{' '}}'
+    mustache-split MUSTACHE_CONTENT "$1" '{{' '}}'
 
     while [[ "${#MUSTACHE_CONTENT[@]}" -gt 1 ]]; do
         mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_CONTENT[1]}"
@@ -381,12 +380,12 @@ mustache-parse() {
                         # mustache-get-content so the lambda does not
                         # execute in a subshell?
                         MUSTACHE_CONTENT=$($MUSTACHE_TAG "${MUSTACHE_BLOCK[0]}")
-                        mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "$MUSTACHE_CURRENT" false
+                        mustache-parse "$MUSTACHE_CONTENT" "$MUSTACHE_CURRENT" false
                         MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
                     elif mustache-is-array "$MUSTACHE_TAG"; then
                         eval 'mustache-loop "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_TAG" "${!'"$MUSTACHE_TAG"'[@]}"'
                     else
-                        mustache-parse MUSTACHE_CONTENT "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false
+                        mustache-parse "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false
                     fi
                 fi
 
@@ -412,7 +411,7 @@ mustache-parse() {
                 mustache-full-tag-name MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
 
                 if ! mustache-test "$MUSTACHE_TAG"; then
-                    mustache-parse MUSTACHE_CONTENT "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false "$MUSTACHE_CURRENT"
+                    mustache-parse "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false "$MUSTACHE_CURRENT"
                 fi
 
                 MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
@@ -471,7 +470,6 @@ mustache-parse() {
     done
 
     echo -n "${MUSTACHE_CONTENT[0]}"
-    local "$1" && mustache-indirect "$1" ""
 }
 
 
@@ -515,8 +513,7 @@ mustache-partial() {
             # The extra dot is removed in mustache-indent-lines
             echo -n "${MUSTACHE_PARTIAL}."
         )"
-        mustache-parse MUSTACHE_PARTIAL "$MUSTACHE_PARTIAL" "$6" true
-        echo -n "$MUSTACHE_PARTIAL"
+        mustache-parse "$MUSTACHE_PARTIAL" "$6" true
     )
 
     local "$1" && mustache-indirect "$1" "$MUSTACHE_CONTENT"
@@ -531,11 +528,11 @@ mustache-partial() {
 #     $1: Name of environment variable or function
 #     $2: Current context
 mustache-show() {
-    local CONTENT MUSTACHE_NAME_PARTS
+    local MUSTACHE_NAME_PARTS
 
     if mustache-is-function "$1"; then
         CONTENT=$($1 "")
-        mustache-parse CONTENT "$CONTENT" "$2" false
+        mustache-parse "$CONTENT" "$2" false
         return 0
     fi
 
@@ -697,4 +694,4 @@ mustache-trim-whitespace() {
 
 
 mustache-get-content MUSTACHE_CONTENT ${1+"$@"}
-mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "" true
+mustache-parse "$MUSTACHE_CONTENT" "" true
