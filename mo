@@ -321,6 +321,12 @@ mustache-indent-lines() {
 
     RESULT=""
     CONTENT="${3:0: -1}" # Remove newline and dot from workaround - in mustache-partial
+
+    if [ -z "$2" ]; then
+        local "$1" && mustache-indirect "$1" "$CONTENT"
+        return 0
+    fi
+
     mustache-find-string POS_N "$CONTENT" $'\n'
     mustache-find-string POS_R "$CONTENT" $'\r'
 
