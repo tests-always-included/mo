@@ -60,6 +60,11 @@ Check out the code and hack away.  Please add tests to show off bugs before fixi
 To run against the official specs, you need to make sure you have the "spec" submodule.  If you see a `spec/` folder with stuff in it, you're already set.  Otherwise run `git submodule update --init`.  After that you need to install node.js and run `npm install async` (no, I didn't make a package.json to just list one dependency).  Finally, `./run-spec.js spec/specs/*.json` will run against the official tests - there's over 100 of them.
 
 
+### Porting and Backporting
+
+There is a diagnostic script that is aimed to help at making sure the internal functions all work when testing the script out on a version of bash or in an environment that is causing issues.  When adding new functions, please make sure this script gets updated to properly test your code.
+
+
 ### Failed Specs
 
 It is acceptable for some of the official spec tests to fail.  Anything dealing with multiple levels of objects (eg. `{{a.b.c}}`) and changing the delimiters (`{{= | | =}}` will fail.  Other than that, this bash implementation of the mustache spec should pass tests.
