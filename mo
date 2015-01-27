@@ -153,10 +153,11 @@ mustache-get-content() {
 #     $2: The indent string
 #     $3: The string to reindent
 mustache-indent-lines() {
-    local CONTENT FRAGMENT POS_N POS_R RESULT TRIMMED
+    local CONTENT FRAGMENT LEN POS_N POS_R RESULT TRIMMED
 
     RESULT=""
-    CONTENT="${3:0: -1}" # Remove newline and dot from workaround - in mustache-partial
+    LEN=$((${#3} - 1))
+    CONTENT="${3:0:$LEN}" # Remove newline and dot from workaround - in mustache-partial
 
     if [ -z "$2" ]; then
         local "$1" && mustache-indirect "$1" "$CONTENT"
@@ -283,7 +284,8 @@ mustache-is-standalone() {
 
     mustache-trim-chars BEFORE_TRIMMED "$2" false true " " $'\t'
     mustache-trim-chars AFTER_TRIMMED "$3" true false " " $'\t'
-    CHAR=${BEFORE_TRIMMED: -1}
+    CHAR=$((${#BEFORE_TRIMMED} - 1))
+    CHAR=${BEFORE_TRIMMED:$CHAR}
 
     if [[ "$CHAR" != $'\n' ]] && [[ "$CHAR" != $'\r' ]]; then
         if [[ ! -z "$CHAR" ]] || ! $4; then
@@ -311,13 +313,14 @@ mustache-is-standalone() {
 #     $1: Variable name to receive the file's content
 #     $2: Filename to load
 mustache-load-file() {
-    local CONTENT
+    local CONTENT LEN
 
     # The subshell removes any trailing newlines.  We forcibly add
     # a dot to the content to preserve all newlines.
     # TODO: remove cat and replace with read loop?
     CONTENT=$(cat $2; echo '.')
-    CONTENT=${CONTENT:0: -1}  # Remove last dot
+    LEN=$((${#CONTENT} - 1))
+    CONTENT=${CONTENT:0:$LEN}  # Remove last dot
 
     local "$1" && mustache-indirect "$1" "$CONTENT"
 }
