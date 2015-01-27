@@ -1,7 +1,19 @@
 #!/bin/bash
+#
+# Mo is a mustache template rendering software written in bash.  It inserts
+# environment variables into templates.
+#
+# Learn more about mustache templates at https://mustache.github.io/
+#
+# Mo is under a MIT style licence with an additional non-advertising clause.
+# See LICENSE.md for the full text.
+#
+# This is open source!  Please feel free to contribute.
+#
+# https://github.com/tests-always-included/mo
 
 
-# Eat content until the right end tag is found.  Returns an array with the
+# Scan content until the right end tag is found.  Returns an array with the
 # following members:
 #     [0] = Content before end tag
 #     [1] = End tag (complete tag)
