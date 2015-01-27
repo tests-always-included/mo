@@ -235,8 +235,7 @@ mustache-is-array() {
 }
 
 
-# Return 0 if the passed name is a function.  Function names are captured
-# at the start of the program and are stored in the $MUSTACHE_FUNCTIONS array.
+# Return 0 if the passed name is a function.
 #
 # Parameters:
 #     $1: Name to check if it's a function
@@ -244,9 +243,12 @@ mustache-is-array() {
 # Return code:
 #     0 if the name is a function, 1 otherwise
 mustache-is-function() {
-    local NAME
+    local FUNCTIONS NAME
 
-    for NAME in ${MUSTACHE_FUNCTIONS[@]}; do
+    FUNCTIONS=$(declare -F)
+    FUNCTIONS=( ${FUNCTIONS//declare -f /} )
+
+    for NAME in ${FUNCTIONS[@]}; do
         if [[ "$NAME" == "$1" ]]; then
             return 0
         fi
@@ -691,8 +693,5 @@ mustache-trim-whitespace() {
 }
 
 
-# Save the list of functions as an array
-MUSTACHE_FUNCTIONS=$(declare -F)
-MUSTACHE_FUNCTIONS=( ${MUSTACHE_FUNCTIONS//declare -f /} )
 mustache-get-content MUSTACHE_CONTENT ${1+"$@"}
 mustache-parse MUSTACHE_CONTENT "$MUSTACHE_CONTENT" "" true
