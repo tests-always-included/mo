@@ -7,9 +7,9 @@ Mo - Mustache Templates in Bash
 
     I hope your {{TIME_PERIOD}} was fun.
 
-Let's try using this with some data in bash.  Save those lines to `trip.txt` and run a command like this:
+The above file is [`demo/fun-trip.mo`](demo/fun-trip.mo).  Let's try using this template some data from bash's environment.  Go to your checked out copy of the project and run a command like this:
 
-    NAME=Tyler TIME_PERIOD=weekend ./mo weekend-trip.txt
+    NAME=Tyler TIME_PERIOD=weekend ./mo demo/fun-trip.mo
 
 Your result?
 
@@ -30,12 +30,42 @@ Requirements
 If you intend to develop this and run the official specs, you also need node.js.
 
 
+How to Use
+----------
+
+If you only plan using strings and numbers, nothing could be simpler.  In your shell script you can choose to export the variables.  The below script is [`demo/using-strings`](demo/using-strings).
+
+    #!/bin/bash
+    cd "$(dirname "$0")" # Go to the script's directory
+    export TEST="This is a test"
+    echo "Your message:  {{TEST}}" | ../mo
+
+The result?  "Your message:  This is a test".
+
+Using arrays adds a slight level of complexity.  *You must source `mo`.*  Look at [`demo/using-arrays`](demo/using-arrays).
+
+    #!/bin/bash
+    cd "$(dirname "$0")" # Go to the script's directory
+    export ARRAY=( one two "three three three" four five )
+    cat << EOF | . ../mo
+    Here are the items in the array:
+    {{#ARRAY}}
+        * {{.}}
+    {{/ARRAY}}
+    EOF
+
+The result?  You get a list of the five elements in the array.  Take a look at the line that executes `mo`.  You'll see that we went from `../mo` to using `. ../mo`.  That is very important when you want arrays to work, since you can not execute a command and have arrays passed to that command's environment.  Instead, we source the file.  `. ../mo` is identical to `source ../mo` and you can find more about that in bash's man page.
+
+There are more scripts available in the [demos directory](demo/) that could help illustrate how you would use this program.
+
+
 Concessions
 -----------
 
 I admit that implementing everything in bash just doesn't make a lot of sense.  For example, the following things just don't work because they don't really mesh with the "bash way".
 
 Pull requests to solve the following issues would be helpful.
+
 
 ### Mustache Syntax
 
@@ -67,7 +97,7 @@ There is a diagnostic script that is aimed to help at making sure the internal f
 
 ### Failed Specs
 
-It is acceptable for some of the official spec tests to fail.  Anything dealing with multiple levels of objects (eg. `{{a.b.c}}`) and changing the delimiters (`{{= | | =}}` will fail.  Other than that, this bash implementation of the mustache spec should pass tests.
+It is acceptable for some of the official spec tests to fail.  Anything dealing with multiple levels of objects (eg. `{{a.b.c}}`) and changing the delimiters (`{{= | | =}}`) will fail.  Other than that, this bash implementation of the mustache spec should pass tests.
 
 Specific issues:
  * Interpolation - Multiple Calls:  This fails because lambdas execute in a subshell so their output can be captured.  This is flagged as a TODO in the code.

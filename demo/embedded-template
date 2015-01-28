@@ -1,0 +1,26 @@
+#!/bin/bash
+#
+# This embeds a template in the script without using strange `cat` syntax.
+
+cd "$(dirname "$0")" # Go to the script's directory
+
+export NAME="Tyler"
+export VEHICLE="Ford Explorer"
+export OVERDUE_LENGTH="2 months"
+export OPTIONS=(
+    "Call a service representative at 1-800-000-0000 to discuss payment options"
+    "Return the vehicle immediately and pay a fine of 1 million dollars"
+)
+sed '0,/^# END/ d' "$(basename "$0")" | . ../mo
+exit
+
+# END
+Attention {{NAME}},
+
+You need to pay for the {{VEHICLE}} you are leasing from us.
+It has been {{OVERDUE_LENGTH}} since your last payment.
+At this point you must do one of the following:
+
+{{#OPTIONS}}
+ * {{.}}
+{{/OPTIONS}}

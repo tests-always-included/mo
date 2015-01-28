@@ -1,0 +1,9 @@
+#!/bin/bash
+cd "$(dirname "$0")" # Go to the script's directory
+export ARRAY=( one two "three three three" four five )
+cat << EOF | . ../mo
+Here are the items in the array:
+{{#ARRAY}}
+    * {{.}}
+{{/ARRAY}}
+EOF

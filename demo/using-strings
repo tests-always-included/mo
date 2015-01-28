@@ -1,0 +1,4 @@
+#!/bin/bash
+cd "$(dirname "$0")" # Go to the script's directory
+export TEST="This is a test"
+echo "Your message:  {{TEST}}" | ../mo
