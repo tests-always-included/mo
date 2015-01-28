@@ -5,8 +5,8 @@ cd "$(dirname "$0")"/..
 date-string() { date; }
 wrapper() { echo -n "*** $1 ***"; }
 
-IP=127.0.0.1
-ALLOWED_HOSTS=( 192.168.0.1 192.168.0.2 192.168.0.3 )
+export IP=127.0.0.1
+export ALLOWED_HOSTS=( 192.168.0.1 192.168.0.2 192.168.0.3 )
 
 cat <<EOF | . mo
 # {{#wrapper}}OH SO IMPORTANT{{/wrapper}}
