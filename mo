@@ -133,7 +133,7 @@ mustache-get-content() {
     if [[ "${#@}" -gt 0 ]]; then
         CONTENT=""
 
-        for FILENAME in ${1+"$@"}; do
+        for FILENAME in "$@"; do
             # This is so relative paths work from inside template files
             CONTENT="$CONTENT"'{{>'"$FILENAME"'}}'
         done
@@ -696,5 +696,5 @@ mustache-trim-whitespace() {
 }
 
 
-mustache-get-content MUSTACHE_CONTENT ${1+"$@"}
+mustache-get-content MUSTACHE_CONTENT "$@"
 mustache-parse "$MUSTACHE_CONTENT" "" true
