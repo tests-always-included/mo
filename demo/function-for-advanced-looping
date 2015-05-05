@@ -1,0 +1,39 @@
+#!/bin/bash
+
+cd "$(dirname "$0")" # Go to the script's directory
+
+EVERY_REPO() {
+    echo "# Starting EVERY_REPO"
+
+    # Get list of repos
+    for REPO in "${REPOS[@]}"; do
+        echo "## Looping one time for repo: $REPO"
+
+        # String replace REPO_ with the name
+        # This changes everything in the content block of the template.
+        # It rewrites {{__REPO__.name}} into {{resque.name}}, for instance.
+        # You can prefix your environment variables and do other things as well.
+        
+        echo -n "$1" | sed "s/__REPO__/${REPO}/"
+
+        echo "## Looped one time for repo: $REPO"
+    done
+
+    echo "# Finished EVERY_REPO"
+}
+
+REPOS=(resque hub rip)
+
+declare -A resque hub rip
+resque=([name]=Resque [url]=http://example.com/resque)
+hub=([name]=Hub [url]=http://example.com/hub)
+rip=([name]=Rip [url]=http://example.com/rip)
+
+cat <<EOF | . ../mo
+{{#EVERY_REPO}}
+The repo is __REPO__
+    Name:  {{__REPO__.name}}
+    URL:  {{__REPO__.url}}
+{{/EVERY_REPO}}
+
+EOF
