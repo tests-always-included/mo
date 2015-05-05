@@ -35,7 +35,7 @@ mustache-find-end-tag() {
 
     while [[ "${#CONTENT[@]}" -gt 1 ]]; do
         mustache-trim-whitespace TAG "${CONTENT[1]}"
-        
+
         # Restore CONTENT[1] before we start using it
         CONTENT[1]='{{'"${CONTENT[1]}"'}}'
 
@@ -307,6 +307,27 @@ mustache-is-standalone() {
 }
 
 
+# Join / implode an array
+#
+# Parameters:
+#     $1: Variable name to receive the joined content
+#     $2: Joiner
+#     $3-$*: Elements to join
+mustache-join() {
+    local JOINER PART RESULT TARGET
+
+    TARGET=$1
+    JOINER=$2
+    RESULT=$3
+    shift 3
+
+    for PART in "$@"; do
+        RESULT="$RESULT$JOINER$PART"
+    done
+
+    local "$TARGET" && mustache-indirect "$TARGET" "$RESULT"
+}
+
 # Read a file
 #
 # Parameters:
@@ -531,7 +552,7 @@ mustache-partial() {
 #     $1: Name of environment variable or function
 #     $2: Current context
 mustache-show() {
-    local MUSTACHE_NAME_PARTS
+    local JOINED MUSTACHE_NAME_PARTS
 
     if mustache-is-function "$1"; then
         CONTENT=$($1 "")
@@ -540,9 +561,14 @@ mustache-show() {
     fi
 
     mustache-split MUSTACHE_NAME_PARTS "$1" "."
-    
+
     if [[ -z "${MUSTACHE_NAME_PARTS[1]}" ]]; then
-        echo -n "${!1}"
+        if mustache-is-array "$1"; then
+            eval mustache-join JOINED "," "\${$1[@]}"
+            echo -n "$JOINED"
+        else
+            echo -n "${!1}"
+        fi
     else
         # Further subindexes are disallowed
         eval 'echo -n "${'"${MUSTACHE_NAME_PARTS[0]}"'['"${MUSTACHE_NAME_PARTS[1]%%.*}"']}"'
@@ -639,7 +665,7 @@ mustache-test() {
 
     if mustache-is-array "$1"; then
         # Arrays must have at least 1 element
-        eval '[[ "${#'"$1"'}" -gt 0 ]]' && return 0
+        eval '[[ "${#'"$1"'[@]}" -gt 0 ]]' && return 0
     else
         # Environment variables must not be empty
         [[ ! -z "${!1}" ]] && return 0

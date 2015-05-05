@@ -1,0 +1,16 @@
+#!/bin/bash
+
+declare -A DATA
+DATA=([one]=111 [two]=222)
+
+cat <<EOF | . ~/bin/mo
+Accessing data directly:
+    DATA: {{DATA}}
+    One: {{DATA.one}}
+    Two: {{DATA.two}}
+
+Things in DATA:
+{{#DATA}}
+    Item: {{.}}
+{{/DATA}}
+EOF
