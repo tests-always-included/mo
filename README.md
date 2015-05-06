@@ -69,7 +69,7 @@ Pull requests to solve the following issues would be helpful.
 
 ### Mustache Syntax
 
-* Dotted names are not supported and this means associative arrays are not addressable via their index.  Partly this is because our target (Bash 3) does not support associative arrays.
+* Dotted names are supported but only for associative arrays (Bash 4).  See [`demo/associative-arrays`](demo/associative-arrays) for an example.
 * There's no "top level" object, so `echo '{.}' | ./mo` does not do anything useful.  In other languages you can say the data for the template is a string and in `mo` the data is always the environment.  Luckily this type of usage is rare and `{.}` works great when iterating over an array.
 * HTML encoding is not built into `mo`.  `{{{var}}}`, `{{&var}}` and `{{var}}` all do the same thing.  `echo '{{TEST}}' | TEST='<b>' mo` will give you "`<b>`" instead of "`&gt;b&lt;`".
 * You can not change the delimiters.
@@ -78,7 +78,7 @@ Pull requests to solve the following issues would be helpful.
 ### General Scripting Issues
 
 * Using binary files as templates is simply not allowed.
-* Bash does not support nested structures like fancy objects.  The best you can do are arrays.  I'm not able to add super complex structures to bash - it's just a shell after all!
+* Bash does not support anything more complex than strings/numbers inside of associative arrays.  I'm not able to add objects nor nested arrays to bash - it's just a shell after all!
 * You must make sure the data is in the environment when `mo` runs.  The easiest way to do that is to source `mo` in your shell script after setting up lots of other environment variables / functions.
 
 
