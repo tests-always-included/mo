@@ -289,14 +289,14 @@ mustache-is-standalone() {
 
     if [[ "$CHAR" != $'\n' ]] && [[ "$CHAR" != $'\r' ]]; then
         if [[ ! -z "$CHAR" ]] || ! $4; then
-            return 1;
+            return 1
         fi
     fi
 
     CHAR=${AFTER_TRIMMED:0:1}
 
     if [[ "$CHAR" != $'\n' ]] && [[ "$CHAR" != $'\r' ]] && [[ ! -z "$CHAR" ]]; then
-        return 2;
+        return 2
     fi
 
     if [[ "$CHAR" == $'\r' ]] && [[ "${AFTER_TRIMMED:1:1}" == $'\n' ]]; then
@@ -722,5 +722,13 @@ mustache-trim-whitespace() {
 }
 
 
-mustache-get-content MUSTACHE_CONTENT "$@"
-mustache-parse "$MUSTACHE_CONTENT" "" true
+mo() (
+    # Execute in a subshell so IFS is reset
+    IFS=$' \n\t'
+    mustache-get-content MUSTACHE_CONTENT "$@"
+    mustache-parse "$MUSTACHE_CONTENT" "" true
+)
+
+if [[ "$0" == "$BASH_SOURCE" ]] || ! [[ -n "$BASH_SOURCE" ]]; then
+    mo "$@"
+fi
