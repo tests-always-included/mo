@@ -1,0 +1,6 @@
+Issue #7
+{{STR}}
+{{#DATA}}
+    Item: {{.}}
+    String: {{STR}}
+{{/DATA}}

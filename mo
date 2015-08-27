@@ -111,7 +111,7 @@ mustache-find-string() {
 #     $2: Context name
 #     $3: Desired variable name
 mustache-full-tag-name() {
-    if [[ -z "$2" ]]; then
+    if [[ -z "$2" ]] || [[ "$2" == *.* ]]; then
         local "$1" && mustache-indirect "$1" "$3"
     else
         local "$1" && mustache-indirect "$1" "${2}.${3}"
