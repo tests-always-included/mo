@@ -1,4 +1,7 @@
 #!/bin/bash
+#
+# This example does not source `mo` and is intentionally restricted to
+# variables that are not arrays.
 cd "$(dirname "$0")" # Go to the script's directory
 export TEST="This is a test"
 echo "Your message:  {{TEST}}" | ../mo

@@ -28,8 +28,8 @@ declare -A resque hub rip
 resque=([name]=Resque [url]=http://example.com/resque)
 hub=([name]=Hub [url]=http://example.com/hub)
 rip=([name]=Rip [url]=http://example.com/rip)
-
-cat <<EOF | . ../mo
+. ../mo
+cat <<EOF | mo
 {{#EVERY_REPO}}
 The repo is __REPO__
     Name:  {{__REPO__.name}}

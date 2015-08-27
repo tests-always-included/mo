@@ -47,14 +47,15 @@ Using arrays adds a slight level of complexity.  *You must source `mo`.*  Look a
     #!/bin/bash
     cd "$(dirname "$0")" # Go to the script's directory
     export ARRAY=( one two "three three three" four five )
-    cat << EOF | . ../mo
+    . ../mo # This loads the "mo" function
+    cat << EOF | mo
     Here are the items in the array:
     {{#ARRAY}}
         * {{.}}
     {{/ARRAY}}
     EOF
 
-The result?  You get a list of the five elements in the array.  Take a look at the line that executes `mo`.  You'll see that we went from `../mo` to using `. ../mo`.  That is very important when you want arrays to work, since you can not execute a command and have arrays passed to that command's environment.  Instead, we source the file.  `. ../mo` is identical to `source ../mo` and you can find more about that in bash's man page.
+The result?  You get a list of the five elements in the array.  It is vital that you source `mo` and run the function when you want arrays to work because you can not execute a command and have arrays passed to that command's environment.  Instead, we first source the file to load the function and then run the function directly.
 
 There are more scripts available in the [demos directory](demo/) that could help illustrate how you would use this program.
 

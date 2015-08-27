@@ -11,7 +11,8 @@ export OPTIONS=(
     "Call a service representative at 1-800-000-0000 to discuss payment options"
     "Return the vehicle immediately and pay a fine of 1 million dollars"
 )
-sed '0,/^# END/ d' "$(basename "$0")" | . ../mo
+. ../mo
+sed '0,/^# END/ d' "$(basename "$0")" | mo
 exit
 
 # END
