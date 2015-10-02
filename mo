@@ -1,9 +1,13 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
-# Mo is a mustache template rendering software written in bash.  It inserts
-# environment variables into templates.
-#
-# Learn more about mustache templates at https://mustache.github.io/
+#/ Mo is a mustache template rendering software written in bash.  It inserts
+#/ environment variables into templates.
+#/
+#/ Simply put, mo will change {{VARIABLE}} into the value of that
+#/ environment variable.  You can use {{#VARIABLE}}content{{/VARIABLE}} to
+#/ conditionally display content or iterate over the values of an array.
+#/
+#/ Learn more about mustache templates at https://mustache.github.io/
 #
 # Mo is under a MIT style licence with an additional non-advertising clause.
 # See LICENSE.md for the full text.
@@ -26,15 +30,15 @@
 #     $2: Content
 #     $3: Name of end tag
 #     $4: If -z, do standalone tag processing before finishing
-mustache-find-end-tag() {
+moFindEndTag() {
     local CONTENT SCANNED
 
     # Find open tags
     SCANNED=""
-    mustache-split CONTENT "$2" '{{' '}}'
+    moSplit CONTENT "$2" '{{' '}}'
 
     while [[ "${#CONTENT[@]}" -gt 1 ]]; do
-        mustache-trim-whitespace TAG "${CONTENT[1]}"
+        moTrimWhitespace TAG "${CONTENT[1]}"
 
         # Restore CONTENT[1] before we start using it
         CONTENT[1]='{{'"${CONTENT[1]}"'}}'
@@ -43,20 +47,20 @@ mustache-find-end-tag() {
             '#'* | '^'*)
                 # Start another block
                 SCANNED="${SCANNED}${CONTENT[0]}${CONTENT[1]}"
-                mustache-trim-whitespace TAG "${TAG:1}"
-                mustache-find-end-tag CONTENT "${CONTENT[2]}" "$TAG" "loop"
+                moTrimWhitespace TAG "${TAG:1}"
+                moFindEndTag CONTENT "${CONTENT[2]}" "$TAG" "loop"
                 SCANNED="${SCANNED}${CONTENT[0]}${CONTENT[1]}"
                 CONTENT=${CONTENT[2]}
                 ;;
 
             '/'*)
                 # End a block - could be ours
-                mustache-trim-whitespace TAG "${TAG:1}"
+                moTrimWhitespace TAG "${TAG:1}"
                 SCANNED="$SCANNED${CONTENT[0]}"
 
                 if [[ "$TAG" == "$3" ]]; then
                     # Found our end tag
-                    if [[ -z "$4" ]] && mustache-is-standalone STANDALONE_BYTES "$SCANNED" "${CONTENT[2]}" true; then
+                    if [[ -z "$4" ]] && moIsStandalone STANDALONE_BYTES "$SCANNED" "${CONTENT[2]}" true; then
                         # This is also a standalone tag - clean up whitespace
                         # and move those whitespace bytes to the "tag" element
                         STANDALONE_BYTES=( $STANDALONE_BYTES )
@@ -65,7 +69,7 @@ mustache-find-end-tag() {
                         CONTENT[2]="${CONTENT[2]:${STANDALONE_BYTES[1]}}"
                     fi
 
-                    local "$1" && mustache-indirect-array "$1" "$SCANNED" "${CONTENT[1]}" "${CONTENT[2]}"
+                    local "$1" && moIndirectArray "$1" "$SCANNED" "${CONTENT[1]}" "${CONTENT[2]}"
                     return 0
                 fi
 
@@ -80,12 +84,12 @@ mustache-find-end-tag() {
                 ;;
         esac
 
-        mustache-split CONTENT "$CONTENT" '{{' '}}'
+        moSplit CONTENT "$CONTENT" '{{' '}}'
     done
 
     # Did not find our closing tag
     SCANNED="$SCANNED${CONTENT[0]}"
-    local "$1" && mustache-indirect-array "$1" "${SCANNED}" "" ""
+    local "$1" && moIndirectArray "$1" "${SCANNED}" "" ""
 }
 
 
@@ -95,12 +99,12 @@ mustache-find-end-tag() {
 #     $1: Destination variable
 #     $2: Haystack
 #     $3: Needle
-mustache-find-string() {
+moFindString() {
     local POS STRING
 
     STRING=${2%%$3*}
     [[ "$STRING" == "$2" ]] && POS=-1 || POS=${#STRING}
-    local "$1" && mustache-indirect "$1" $POS
+    local "$1" && moIndirect "$1" $POS
 }
 
 
@@ -110,11 +114,11 @@ mustache-find-string() {
 #     $1: Target variable to store results
 #     $2: Context name
 #     $3: Desired variable name
-mustache-full-tag-name() {
+moFullTagName() {
     if [[ -z "$2" ]] || [[ "$2" == *.* ]]; then
-        local "$1" && mustache-indirect "$1" "$3"
+        local "$1" && moIndirect "$1" "$3"
     else
-        local "$1" && mustache-indirect "$1" "${2}.${3}"
+        local "$1" && moIndirect "$1" "${2}.${3}"
     fi
 }
 
@@ -125,7 +129,7 @@ mustache-full-tag-name() {
 # Parameters:
 #     $1: Variable name to assign this content back as
 #     $2-*: File names (optional)
-mustache-get-content() {
+moGetContent() {
     local CONTENT FILENAME TARGET
 
     TARGET=$1
@@ -138,10 +142,10 @@ mustache-get-content() {
             CONTENT="$CONTENT"'{{>'"$FILENAME"'}}'
         done
     else
-        mustache-load-file CONTENT /dev/stdin
+        moLoadFile CONTENT /dev/stdin
     fi
 
-    local "$TARGET" && mustache-indirect "$TARGET" "$CONTENT"
+    local "$TARGET" && moIndirect "$TARGET" "$CONTENT"
 }
 
 
@@ -152,20 +156,20 @@ mustache-get-content() {
 #     $1: Name of destination variable to get an array of lines
 #     $2: The indent string
 #     $3: The string to reindent
-mustache-indent-lines() {
+moIndentLines() {
     local CONTENT FRAGMENT LEN POS_N POS_R RESULT TRIMMED
 
     RESULT=""
     LEN=$((${#3} - 1))
-    CONTENT="${3:0:$LEN}" # Remove newline and dot from workaround - in mustache-partial
+    CONTENT="${3:0:$LEN}" # Remove newline and dot from workaround - in moPartial
 
     if [ -z "$2" ]; then
-        local "$1" && mustache-indirect "$1" "$CONTENT"
+        local "$1" && moIndirect "$1" "$CONTENT"
         return 0
     fi
 
-    mustache-find-string POS_N "$CONTENT" $'\n'
-    mustache-find-string POS_R "$CONTENT" $'\r'
+    moFindString POS_N "$CONTENT" $'\n'
+    moFindString POS_R "$CONTENT" $'\r'
 
     while [[ "$POS_N" -gt -1 ]] || [[ "$POS_R" -gt -1 ]]; do
         if [[ "$POS_N" -gt -1 ]]; then
@@ -176,18 +180,18 @@ mustache-indent-lines() {
             CONTENT=${CONTENT:$POS_R + 1}
         fi
 
-        mustache-trim-chars TRIMMED "$FRAGMENT" false true " " $'\t' $'\n' $'\r'
+        moTrimChars TRIMMED "$FRAGMENT" false true " " $'\t' $'\n' $'\r'
 
         if [ ! -z "$TRIMMED" ]; then
             FRAGMENT="$2$FRAGMENT"
         fi
 
         RESULT="$RESULT$FRAGMENT"
-        mustache-find-string POS_N "$CONTENT" $'\n'
-        mustache-find-string POS_R "$CONTENT" $'\r'
+        moFindString POS_N "$CONTENT" $'\n'
+        moFindString POS_R "$CONTENT" $'\r'
     done
 
-    mustache-trim-chars TRIMMED "$CONTENT" false true " " $'\t'
+    moTrimChars TRIMMED "$CONTENT" false true " " $'\t'
 
     if [ ! -z "$TRIMMED" ]; then
         CONTENT="$2$CONTENT"
@@ -195,7 +199,7 @@ mustache-indent-lines() {
 
     RESULT="$RESULT$CONTENT"
 
-    local "$1" && mustache-indirect "$1" "$RESULT"
+    local "$1" && moIndirect "$1" "$RESULT"
 }
 
 
@@ -204,7 +208,7 @@ mustache-indent-lines() {
 # Parameters:
 #     $1: Variable name
 #     $2: Value
-mustache-indirect() {
+moIndirect() {
     unset -v "$1"
     printf -v "$1" '%s' "$2"
 }
@@ -215,7 +219,7 @@ mustache-indirect() {
 # Parameters:
 #     $1: Variable name
 #     $2-*: Array elements
-mustache-indirect-array() {
+moIndirectArray() {
     unset -v "$1"
     eval $1=\(\"\${@:2}\"\)
 }
@@ -228,7 +232,7 @@ mustache-indirect-array() {
 #
 # Return code:
 #     0 if the name is not empty, 1 otherwise
-mustache-is-array() {
+moIsArray() {
     local MUSTACHE_TEST
 
     MUSTACHE_TEST=$(declare -p "$1" 2>/dev/null) || return 1
@@ -246,7 +250,7 @@ mustache-is-array() {
 #
 # Return code:
 #     0 if the name is a function, 1 otherwise
-mustache-is-function() {
+moIsFunction() {
     local FUNCTIONS NAME
 
     FUNCTIONS=$(declare -F)
@@ -270,7 +274,7 @@ mustache-is-function() {
 # string (27) and the number of bytes to trim in the "after" string (10).
 # Useful for string manipulation:
 #
-#     mustache-is-standalone RESULT "$before" "$after" false || return 0
+#     moIsStandalone RESULT "$before" "$after" false || return 0
 #     RESULT_ARRAY=( $RESULT )
 #     echo "${before:0:${RESULT_ARRAY[0]}}...${after:${RESULT_ARRAY[1]}}"
 #
@@ -279,11 +283,11 @@ mustache-is-function() {
 #     $2: Content before the tag
 #     $3: Content after the tag
 #     $4: true/false: is this the beginning of the content?
-mustache-is-standalone() {
+moIsStandalone() {
     local AFTER_TRIMMED BEFORE_TRIMMED CHAR
 
-    mustache-trim-chars BEFORE_TRIMMED "$2" false true " " $'\t'
-    mustache-trim-chars AFTER_TRIMMED "$3" true false " " $'\t'
+    moTrimChars BEFORE_TRIMMED "$2" false true " " $'\t'
+    moTrimChars AFTER_TRIMMED "$3" true false " " $'\t'
     CHAR=$((${#BEFORE_TRIMMED} - 1))
     CHAR=${BEFORE_TRIMMED:$CHAR}
 
@@ -303,7 +307,7 @@ mustache-is-standalone() {
         CHAR="$CHAR"$'\n'
     fi
 
-    local "$1" && mustache-indirect "$1" "$((${#BEFORE_TRIMMED})) $((${#3} + ${#CHAR} - ${#AFTER_TRIMMED}))"
+    local "$1" && moIndirect "$1" "$((${#BEFORE_TRIMMED})) $((${#3} + ${#CHAR} - ${#AFTER_TRIMMED}))"
 }
 
 
@@ -313,7 +317,7 @@ mustache-is-standalone() {
 #     $1: Variable name to receive the joined content
 #     $2: Joiner
 #     $3-$*: Elements to join
-mustache-join() {
+moJoin() {
     local JOINER PART RESULT TARGET
 
     TARGET=$1
@@ -325,7 +329,7 @@ mustache-join() {
         RESULT="$RESULT$JOINER$PART"
     done
 
-    local "$TARGET" && mustache-indirect "$TARGET" "$RESULT"
+    local "$TARGET" && moIndirect "$TARGET" "$RESULT"
 }
 
 # Read a file
@@ -333,7 +337,7 @@ mustache-join() {
 # Parameters:
 #     $1: Variable name to receive the file's content
 #     $2: Filename to load
-mustache-load-file() {
+moLoadFile() {
     local CONTENT LEN
 
     # The subshell removes any trailing newlines.  We forcibly add
@@ -343,7 +347,7 @@ mustache-load-file() {
     LEN=$((${#CONTENT} - 1))
     CONTENT=${CONTENT:0:$LEN}  # Remove last dot
 
-    local "$1" && mustache-indirect "$1" "$CONTENT"
+    local "$1" && moIndirect "$1" "$CONTENT"
 }
 
 
@@ -353,7 +357,7 @@ mustache-load-file() {
 #     $1: Content to parse and reparse and reparse
 #     $2: Tag prefix (context name)
 #     $3-*: Names to insert into the parsed content
-mustache-loop() {
+moLoop() {
     local CONTENT CONTEXT CONTEXT_BASE IGNORE
 
     CONTENT=$1
@@ -361,8 +365,8 @@ mustache-loop() {
     shift 2
 
     while [[ "${#@}" -gt 0 ]]; do
-        mustache-full-tag-name CONTEXT "$CONTEXT_BASE" "$1"
-        mustache-parse "$CONTENT" "$CONTEXT" false
+        moFullTagName CONTEXT "$CONTEXT_BASE" "$1"
+        moParse "$CONTENT" "$CONTEXT" false
         shift
     done
 }
@@ -374,7 +378,7 @@ mustache-loop() {
 #     $1: Block of text to change
 #     $2: Current name (the variable NAME for what {{.}} means)
 #     $3: true when no content before this, false otherwise
-mustache-parse() {
+moParse() {
     # Keep naming variables MUSTACHE_* here to not overwrite needed variables
     # used in the string replacements
     local MUSTACHE_BLOCK MUSTACHE_CONTENT MUSTACHE_CURRENT MUSTACHE_IS_BEGINNING MUSTACHE_TAG
@@ -383,33 +387,33 @@ mustache-parse() {
     MUSTACHE_IS_BEGINNING=$3
 
     # Find open tags
-    mustache-split MUSTACHE_CONTENT "$1" '{{' '}}'
+    moSplit MUSTACHE_CONTENT "$1" '{{' '}}'
 
     while [[ "${#MUSTACHE_CONTENT[@]}" -gt 1 ]]; do
-        mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_CONTENT[1]}"
+        moTrimWhitespace MUSTACHE_TAG "${MUSTACHE_CONTENT[1]}"
 
         case $MUSTACHE_TAG in
             '#'*)
                 # Loop, if/then, or pass content through function
                 # Sets context
-                mustache-standalone-allowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
-                mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
-                mustache-find-end-tag MUSTACHE_BLOCK "$MUSTACHE_CONTENT" "$MUSTACHE_TAG"
-                mustache-full-tag-name MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
+                moStandaloneAllowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
+                moTrimWhitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
+                moFindEndTag MUSTACHE_BLOCK "$MUSTACHE_CONTENT" "$MUSTACHE_TAG"
+                moFullTagName MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
 
-                if mustache-test "$MUSTACHE_TAG"; then
+                if moTest "$MUSTACHE_TAG"; then
                     # Show / loop / pass through function
-                    if mustache-is-function "$MUSTACHE_TAG"; then
+                    if moIsFunction "$MUSTACHE_TAG"; then
                         # TODO: Consider piping the output to
-                        # mustache-get-content so the lambda does not
+                        # moGetContent so the lambda does not
                         # execute in a subshell?
                         MUSTACHE_CONTENT=$($MUSTACHE_TAG "${MUSTACHE_BLOCK[0]}")
-                        mustache-parse "$MUSTACHE_CONTENT" "$MUSTACHE_CURRENT" false
+                        moParse "$MUSTACHE_CONTENT" "$MUSTACHE_CURRENT" false
                         MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
-                    elif mustache-is-array "$MUSTACHE_TAG"; then
-                        eval 'mustache-loop "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_TAG" "${!'"$MUSTACHE_TAG"'[@]}"'
+                    elif moIsArray "$MUSTACHE_TAG"; then
+                        eval 'moLoop "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_TAG" "${!'"$MUSTACHE_TAG"'[@]}"'
                     else
-                        mustache-parse "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false
+                        moParse "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false
                     fi
                 fi
 
@@ -418,24 +422,24 @@ mustache-parse() {
 
             '>'*)
                 # Load partial - get name of file relative to cwd
-                mustache-partial MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING "$MUSTACHE_CURRENT"
+                moPartial MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING "$MUSTACHE_CURRENT"
                 ;;
 
             '/'*)
                 # Closing tag - If hit in this loop, we simply ignore
-                # Matching tags are found in mustache-find-end-tag
-                mustache-standalone-allowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
+                # Matching tags are found in moFindEndTag
+                moStandaloneAllowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
                 ;;
 
             '^'*)
                 # Display section if named thing does not exist
-                mustache-standalone-allowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
-                mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
-                mustache-find-end-tag MUSTACHE_BLOCK "$MUSTACHE_CONTENT" "$MUSTACHE_TAG"
-                mustache-full-tag-name MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
+                moStandaloneAllowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
+                moTrimWhitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
+                moFindEndTag MUSTACHE_BLOCK "$MUSTACHE_CONTENT" "$MUSTACHE_TAG"
+                moFullTagName MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
 
-                if ! mustache-test "$MUSTACHE_TAG"; then
-                    mustache-parse "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false "$MUSTACHE_CURRENT"
+                if ! moTest "$MUSTACHE_TAG"; then
+                    moParse "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false "$MUSTACHE_CURRENT"
                 fi
 
                 MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
@@ -444,53 +448,53 @@ mustache-parse() {
             '!'*)
                 # Comment - ignore the tag content entirely
                 # Trim spaces/tabs before the comment
-                mustache-standalone-allowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
+                moStandaloneAllowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
                 ;;
 
             .)
                 # Current content (environment variable or function)
-                mustache-standalone-denied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
-                mustache-show "$MUSTACHE_CURRENT" "$MUSTACHE_CURRENT"
+                moStandaloneDenied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
+                moShow "$MUSTACHE_CURRENT" "$MUSTACHE_CURRENT"
                 ;;
 
             '=')
                 # Change delimiters
                 # Any two non-whitespace sequences separated by whitespace.
                 # TODO
-                mustache-standalone-allowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
+                moStandaloneAllowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
                 ;;
 
             '{'*)
                 # Unescaped - split on }}} not }}
-                mustache-standalone-denied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
+                moStandaloneDenied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
                 MUSTACHE_CONTENT="${MUSTACHE_TAG:1}"'}}'"$MUSTACHE_CONTENT"
-                mustache-split MUSTACHE_CONTENT "$MUSTACHE_CONTENT" '}}}'
-                mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_CONTENT[0]}"
-                mustache-full-tag-name MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
+                moSplit MUSTACHE_CONTENT "$MUSTACHE_CONTENT" '}}}'
+                moTrimWhitespace MUSTACHE_TAG "${MUSTACHE_CONTENT[0]}"
+                moFullTagName MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
                 MUSTACHE_CONTENT=${MUSTACHE_CONTENT[1]}
 
                 # Now show the value
-                mustache-show "$MUSTACHE_TAG" "$MUSTACHE_CURRENT"
+                moShow "$MUSTACHE_TAG" "$MUSTACHE_CURRENT"
                 ;;
 
             '&'*)
                 # Unescaped
-                mustache-standalone-denied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
-                mustache-trim-whitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
-                mustache-full-tag-name MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
-                mustache-show "$MUSTACHE_TAG" "$MUSTACHE_CURRENT"
+                moStandaloneDenied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
+                moTrimWhitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
+                moFullTagName MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
+                moShow "$MUSTACHE_TAG" "$MUSTACHE_CURRENT"
                 ;;
 
             *)
                 # Normal environment variable or function call
-                mustache-standalone-denied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
-                mustache-full-tag-name MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
-                mustache-show "$MUSTACHE_TAG" "$MUSTACHE_CURRENT"
+                moStandaloneDenied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
+                moFullTagName MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
+                moShow "$MUSTACHE_TAG" "$MUSTACHE_CURRENT"
                 ;;
         esac
 
         MUSTACHE_IS_BEGINNING=false
-        mustache-split MUSTACHE_CONTENT "$MUSTACHE_CONTENT" '{{' '}}'
+        moSplit MUSTACHE_CONTENT "$MUSTACHE_CONTENT" '{{' '}}'
     done
 
     echo -n "${MUSTACHE_CONTENT[0]}"
@@ -510,10 +514,10 @@ mustache-parse() {
 #     $4: Content after the tag
 #     $5: true/false: is this the beginning of the content?
 #     $6: Current context name
-mustache-partial() {
+moPartial() {
     local MUSTACHE_CONTENT MUSTACHE_FILENAME MUSTACHE_INDENT MUSTACHE_LINE MUSTACHE_PARTIAL MUSTACHE_STANDALONE
 
-    if mustache-is-standalone MUSTACHE_STANDALONE "$2" "$4" $5; then
+    if moIsStandalone MUSTACHE_STANDALONE "$2" "$4" $5; then
         MUSTACHE_STANDALONE=( $MUSTACHE_STANDALONE )
         echo -n "${2:0:${MUSTACHE_STANDALONE[0]}}"
         MUSTACHE_INDENT=${2:${MUSTACHE_STANDALONE[0]}}
@@ -524,23 +528,23 @@ mustache-partial() {
         MUSTACHE_CONTENT=$4
     fi
 
-    mustache-trim-whitespace MUSTACHE_FILENAME "${3:1}"
+    moTrimWhitespace MUSTACHE_FILENAME "${3:1}"
 
     # Execute in subshell to preserve current cwd and environment
     (
         # TODO:  Remove dirname and use a function instead
         cd "$(dirname "$MUSTACHE_FILENAME")"
-        mustache-indent-lines MUSTACHE_PARTIAL "$MUSTACHE_INDENT" "$(
-            mustache-load-file MUSTACHE_PARTIAL "${MUSTACHE_FILENAME##*/}"
+        moIndentLines MUSTACHE_PARTIAL "$MUSTACHE_INDENT" "$(
+            moLoadFile MUSTACHE_PARTIAL "${MUSTACHE_FILENAME##*/}"
 
             # Fix bash handling of subshells
-            # The extra dot is removed in mustache-indent-lines
+            # The extra dot is removed in moIndentLines
             echo -n "${MUSTACHE_PARTIAL}."
         )"
-        mustache-parse "$MUSTACHE_PARTIAL" "$6" true
+        moParse "$MUSTACHE_PARTIAL" "$6" true
     )
 
-    local "$1" && mustache-indirect "$1" "$MUSTACHE_CONTENT"
+    local "$1" && moIndirect "$1" "$MUSTACHE_CONTENT"
 }
 
 
@@ -551,20 +555,20 @@ mustache-partial() {
 # Parameters:
 #     $1: Name of environment variable or function
 #     $2: Current context
-mustache-show() {
+moShow() {
     local JOINED MUSTACHE_NAME_PARTS
 
-    if mustache-is-function "$1"; then
+    if moIsFunction "$1"; then
         CONTENT=$($1 "")
-        mustache-parse "$CONTENT" "$2" false
+        moParse "$CONTENT" "$2" false
         return 0
     fi
 
-    mustache-split MUSTACHE_NAME_PARTS "$1" "."
+    moSplit MUSTACHE_NAME_PARTS "$1" "."
 
     if [[ -z "${MUSTACHE_NAME_PARTS[1]}" ]]; then
-        if mustache-is-array "$1"; then
-            eval mustache-join JOINED "," "\${$1[@]}"
+        if moIsArray "$1"; then
+            eval moJoin JOINED "," "\${$1[@]}"
             echo -n "$JOINED"
         else
             echo -n "${!1}"
@@ -583,11 +587,11 @@ mustache-show() {
 #     $2: String to split
 #     $3: Starting delimiter
 #     $4: Ending delimiter (optional)
-mustache-split() {
+moSplit() {
     local POS RESULT
 
     RESULT=( "$2" )
-    mustache-find-string POS "${RESULT[0]}" "$3"
+    moFindString POS "${RESULT[0]}" "$3"
 
     if [[ "$POS" -ne -1 ]]; then
         # The first delimiter was found
@@ -595,7 +599,7 @@ mustache-split() {
         RESULT[0]=${RESULT[0]:0:$POS}
 
         if [[ ! -z "$4" ]]; then
-            mustache-find-string POS "${RESULT[1]}" "$4"
+            moFindString POS "${RESULT[1]}" "$4"
 
             if [[ "$POS" -ne -1 ]]; then
                 # The second delimiter was found
@@ -605,7 +609,7 @@ mustache-split() {
         fi
     fi
 
-    local "$1" && mustache-indirect-array "$1" "${RESULT[@]}"
+    local "$1" && moIndirectArray "$1" "${RESULT[@]}"
 }
 
 
@@ -619,16 +623,16 @@ mustache-split() {
 #     $3: Tag content (not used)
 #     $4: Content after the tag
 #     $5: true/false: is this the beginning of the content?
-mustache-standalone-allowed() {
+moStandaloneAllowed() {
     local STANDALONE_BYTES
 
-    if mustache-is-standalone STANDALONE_BYTES "$2" "$4" $5; then
+    if moIsStandalone STANDALONE_BYTES "$2" "$4" $5; then
         STANDALONE_BYTES=( $STANDALONE_BYTES )
         echo -n "${2:0:${STANDALONE_BYTES[0]}}"
-        local "$1" && mustache-indirect "$1" "${4:${STANDALONE_BYTES[1]}}"
+        local "$1" && moIndirect "$1" "${4:${STANDALONE_BYTES[1]}}"
     else
         echo -n "$2"
-        local "$1" && mustache-indirect "$1" "$4"
+        local "$1" && moIndirect "$1" "$4"
     fi
 }
 
@@ -641,9 +645,9 @@ mustache-standalone-allowed() {
 #     $2: Content before the tag that was not yet written
 #     $3: Tag content (not used)
 #     $4: Content after the tag
-mustache-standalone-denied() {
+moStandaloneDenied() {
     echo -n "$2"
-    local "$1" && mustache-indirect "$1" "$4"
+    local "$1" && moIndirect "$1" "$4"
 }
 
 
@@ -659,11 +663,11 @@ mustache-standalone-denied() {
 #
 # Return code:
 #     0 if the name is not empty, 1 otherwise
-mustache-test() {
+moTest() {
     # Test for functions
-    mustache-is-function "$1" && return 0
+    moIsFunction "$1" && return 0
 
-    if mustache-is-array "$1"; then
+    if moIsArray "$1"; then
         # Arrays must have at least 1 element
         eval '[[ "${#'"$1"'[@]}" -gt 0 ]]' && return 0
     else
@@ -683,7 +687,7 @@ mustache-test() {
 #     $3: true/false - trim front?
 #     $4: true/false - trim end?
 #     $5-*: Characters to trim
-mustache-trim-chars() {
+moTrimChars() {
     local BACK CURRENT FRONT LAST TARGET VAR
 
     TARGET=$1
@@ -705,7 +709,7 @@ mustache-trim-chars() {
         done
     done
 
-    local "$TARGET" && mustache-indirect "$TARGET" "$CURRENT"
+    local "$TARGET" && moIndirect "$TARGET" "$CURRENT"
 }
 
 
@@ -714,20 +718,48 @@ mustache-trim-chars() {
 # Parameters:
 #     $1: Name of variable to store trimmed string
 #     $2: The string
-mustache-trim-whitespace() {
+moTrimWhitespace() {
     local RESULT
 
-    mustache-trim-chars RESULT "$2" true true $'\r' $'\n' $'\t' " "
-    local "$1" && mustache-indirect "$1" "$RESULT"
+    moTrimChars RESULT "$2" true true $'\r' $'\n' $'\t' " "
+    local "$1" && moIndirect "$1" "$RESULT"
 }
 
 
+# Displays the usage for mo.  Pulls this from the file that contained
+# the `mo` function.  Likely will only work when
+#
+# $1 - Filename that has the help message
+#
+# Returns nothing.
+moUsage() {
+    grep '^#/' < "$0" | cut -c 4-
+}
+
+
+# Template parser
+#
+# $* - Filenames to parse.  Can use -h or --help as the only option
+#      in order to show a help message.
+#
+# Returns nothing.
 mo() (
     # Execute in a subshell so IFS is reset
     IFS=$' \n\t'
-    mustache-get-content MUSTACHE_CONTENT "$@"
-    mustache-parse "$MUSTACHE_CONTENT" "" true
+    
+    if [[ $# -gt 0 ]]; then
+        case "$1" in
+            -h|--h|--he|--hel|--help)
+                moUsage "$0"
+                exit 0
+                ;;
+        esac
+    fi
+
+    moGetContent MUSTACHE_CONTENT "$@"
+    moParse "$MUSTACHE_CONTENT" "" true
 )
+
 
 if [[ "$0" == "$BASH_SOURCE" ]] || ! [[ -n "$BASH_SOURCE" ]]; then
     mo "$@"

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # Test individual functions in mo and make sure they are performing their
 # tasks correctly.  This can be used to help determine what needs to get
@@ -8,13 +8,14 @@
 # Functions are tested from the most primitive to the most advanced.
 # Errors, once found, halt the program.  This way we can more easily
 # diagnose what's not working and fix those low-level functions first.
+
 PARENT_PID=$$
 cd "$(dirname "$0")"
 rm -f diagnostic.test
 rm -f diagnostic.partial
 
 # Load mo's functions
-eval "$(sed '/^mustache-get-content /,$d' < mo)"
+. ./mo
 
 fail() {
     echo "$1"
@@ -24,7 +25,7 @@ fail() {
 
 # No dependencies
 
-echo -n "mustache-indirect ... "
+echo -n "moIndirect ... "
 (
     a() {
         local V
@@ -41,14 +42,14 @@ echo -n "mustache-indirect ... "
     }
 
     c() {
-        local "$1" && mustache-indirect "$1" c
+        local "$1" && moIndirect "$1" c
     }
 
     [[ "$(a)" != "ca" ]] && fail "Did not assign or scope bled '$RESULT'"
 )
 echo "ok"
 
-echo -n "mustache-indirect-array ... "
+echo -n "moIndirectArray ... "
 (
     a() {
         local V
@@ -65,98 +66,98 @@ echo -n "mustache-indirect-array ... "
     }
 
     c() {
-        local "$1" && mustache-indirect-array "$1" c c c
+        local "$1" && moIndirectArray "$1" c c c
     }
 
     [[ "$(a)" != "31" ]] && fail "Did not assign or scope bled '$RESULT'"
 )
 echo "ok"
 
-echo -n "mustache-is-array ... "
+echo -n "moIsArray ... "
 (
     TEST=1
-    mustache-is-array TEST && fail "Wrongly said number was an array"
+    moIsArray TEST && fail "Wrongly said number was an array"
 )
 (
     TEST=()
-    mustache-is-array TEST || fail "Wrongly said array was not an array"
+    moIsArray TEST || fail "Wrongly said array was not an array"
 )
 (
     TEST=""
-    mustache-is-array TEST && fail "Wrongly said string was an array"
+    moIsArray TEST && fail "Wrongly said string was an array"
 )
 (
     unset TEST
-    mustache-is-array TEST && fail "Wrongly said undefined was an array"
+    moIsArray TEST && fail "Wrongly said undefined was an array"
 )
 echo "ok"
 
-echo -n "mustache-is-function ... "
+echo -n "moIsFunction ... "
 (
     aa() { echo "hi"; }
 
-    mustache-is-function aa || fail "Did not find a function"
+    moIsFunction aa || fail "Did not find a function"
 
-    mustache-is-function dd && fail "Wrongly found a function"
+    moIsFunction dd && fail "Wrongly found a function"
 )
 echo "ok"
 
-echo -n "mustache-find-string ... "
+echo -n "moFindString ... "
 (
-    mustache-find-string POS "abcdefg" "ab"
+    moFindString POS "abcdefg" "ab"
     [[ "$POS" == "0" ]] || fail "Did not find at beginning of string"
 
-    mustache-find-string POS "abcdefg" "fg"
+    moFindString POS "abcdefg" "fg"
     [[ "$POS" == "5" ]] || fail "Did not find at end of string"
 
-    mustache-find-string POS "abcdefg" "de"
+    moFindString POS "abcdefg" "de"
     [[ "$POS" == "3" ]] || fail "Did not find at middle of string"
 
-    mustache-find-string POS "abcdefg" "CD"
+    moFindString POS "abcdefg" "CD"
     [[ "$POS" == "-1" ]] || fail "Did not correctly return a miss"
 )
 echo "ok"
 
-echo -n "mustache-full-tag-name ... "
+echo -n "moFullTagName ... "
 (
-    mustache-full-tag-name TAG "abc" "def"
+    moFullTagName TAG "abc" "def"
     [[ "$TAG" == "abc.def" ]] || fail "Did not work with a context"
 
-    mustache-full-tag-name TAG "" "one"
+    moFullTagName TAG "" "one"
     [[ "$TAG" == "one" ]] || fail "Did not work without a context"
 )
 echo "ok"
 
-echo -n "mustache-load-file ... "
+echo -n "moLoadFile ... "
 (
     # TODO - find a way to test reading from stdin that is not painful.
 
     touch diagnostic.test
-    mustache-load-file RESULT diagnostic.test
+    moLoadFile RESULT diagnostic.test
     [[ "${#RESULT}" == "0" ]] || fail "Did not read from empty file '$RESULT'"
 
     echo "abc" >> diagnostic.test
-    mustache-load-file RESULT diagnostic.test
+    moLoadFile RESULT diagnostic.test
     [[ "${#RESULT}" == "4" ]] || fail "Did not read from file '$RESULT'"
 
     echo "" >> diagnostic.test
-    mustache-load-file RESULT diagnostic.test
+    moLoadFile RESULT diagnostic.test
     [[ "${#RESULT}" == "5" ]] || fail "Trimmed newline from file '$RESULT'"
 
     rm diagnostic.test
 )
 echo "ok"
 
-echo -n "mustache-standalone-denied ... "
+echo -n "moStandaloneDenied ... "
 (
-    mustache-standalone-denied RESULT before tag after > diagnostic.test
+    moStandaloneDenied RESULT before tag after > diagnostic.test
     [[ "$(cat diagnostic.test)" == "before" ]] || fail "Did not output content before tag '$(cat diagnostic.test)'"
     [[ "$RESULT" == "after" ]] || fail "Did not set the remaining content '$RESULT'"
     rm diagnostic.test
 )
 echo "ok"
 
-echo -n "mustache-test ... "
+echo -n "moTest ... "
 (
     aa() { echo "hi"; }
     bb="bb"
@@ -166,47 +167,48 @@ echo -n "mustache-test ... "
     unset yy
     zz=""
 
-    mustache-test aa || fail "Did not detect a function"
-    mustache-test bb || fail "Did not detect a non-empty string"
-    mustache-test cc || fail "Did not detect a number"
-    mustache-test dd || fail "Did not detect a populated array"
-    mustache-test xx && fail "Erroneously flagged an empty array"
-    mustache-test yy && fail "Erroneously flagged an undefined value"
-    mustache-test zz && fail "Erroneously flagged an empty string"
+    moTest aa || fail "Did not detect a function"
+    moTest bb || fail "Did not detect a non-empty string"
+    moTest cc || fail "Did not detect a number"
+    moTest dd || fail "Did not detect a populated array"
+    moTest xx && fail "Erroneously flagged an empty array"
+    moTest yy && fail "Erroneously flagged an undefined value"
+    moTest zz && fail "Erroneously flagged an empty string"
 )
 echo "ok"
 
-echo -n "mustache-trim-chars ... "
+echo -n "moTrimChars ... "
 (
-    mustache-trim-chars RESULT "abcdabc" true true a b c
+    moTrimChars RESULT "abcdabc" true true a b c
     [[ "$RESULT" == "d" ]] || fail "Did not trim multiple characters '$RESULT'"
 
-    mustache-trim-chars RESULT "abc" true false a c
+    moTrimChars RESULT "abc" true false a c
     [[ "$RESULT" == "bc" ]] || fail "Did not trim only from the front '$RESULT'"
 
-    mustache-trim-chars RESULT "abc" false true a c
+    moTrimChars RESULT "abc" false true a c
     [[ "$RESULT" == "ab" ]] || fail "Did not trim only from the end '$RESULT'"
 )
 echo "ok"
 
-echo -n "mustache-get-content ... "
+echo -n "moGetContent ... "
 (
     # TODO - find a way to test reading from stdin that is not painful.
     # Until then, mock it
-    mustache-load-file() { local "$1" && mustache-indirect "$1" "STDIN"; }
 
-    mustache-get-content RESULT a
+    moLoadFile() { local "$1" && moIndirect "$1" "STDIN"; }
+
+    moGetContent RESULT a
     [[ "$RESULT" == "{{>a}}" ]] || fail "Did not construct 1 partial correctly '$RESULT'"
 
-    mustache-get-content RESULT a b c
+    moGetContent RESULT a b c
     [[ "$RESULT" == "{{>a}}{{>b}}{{>c}}" ]] || fail "Did not construct 3 partials correctly '$RESULT'"
 
-    mustache-get-content RESULT
-    [[ "$RESULT" == "STDIN" ]] || fail "Did not call mustache-load-file correctly"
+    moGetContent RESULT
+    [[ "$RESULT" == "STDIN" ]] || fail "Did not call moLoadFile correctly"
 )
 echo "ok"
 
-echo -n "mustache-indent-lines ... "
+echo -n "moIndentLines ... "
 (
     CR=$'\r'
     LF=$'\n'
@@ -214,52 +216,52 @@ echo -n "mustache-indent-lines ... "
 
     # CAUTION
     # This must have a dot at the end of the input string
-    # That is part of how mustache-partial calls this function
+    # That is part of how moPartial calls this function
     for NEWLINE in "CR" "LF" "CRLF"; do
         NL="${!NEWLINE}"
 
-        mustache-indent-lines RESULT "" "has${NL}${NEWLINE}${NL}."
+        moIndentLines RESULT "" "has${NL}${NEWLINE}${NL}."
         printf -v QUOTED '%q' "$RESULT"
         [[ "$RESULT" == "has${NL}${NEWLINE}${NL}" ]] || fail "Should not have changed string $QUOTED"
 
-        mustache-indent-lines RESULT "" "without${NL}trailing${NL}${NEWLINE}."
+        moIndentLines RESULT "" "without${NL}trailing${NL}${NEWLINE}."
         printf -v QUOTED '%q' "$RESULT"
         [[ "$RESULT" == "without${NL}trailing${NL}${NEWLINE}" ]] || fail "Should not have changed string $QUOTED"
 
-        mustache-indent-lines RESULT "_-_" "has${NL}${NL}${NEWLINE}${NL}."
+        moIndentLines RESULT "_-_" "has${NL}${NL}${NEWLINE}${NL}."
         printf -v QUOTED '%q' "$RESULT"
         [[ "$RESULT" == "_-_has${NL}${NL}_-_${NEWLINE}${NL}" ]] || fail "Should have indented $QUOTED"
 
-        mustache-indent-lines RESULT "_-_" "without${NL}${NL}trailing${NL}${NEWLINE}."
+        moIndentLines RESULT "_-_" "without${NL}${NL}trailing${NL}${NEWLINE}."
         printf -v QUOTED '%q' "$RESULT"
         [[ "$RESULT" == "_-_without${NL}${NL}_-_trailing${NL}_-_${NEWLINE}" ]] || fail "Should have indented $QUOTED"
     done
 )
 echo "ok"
 
-echo -n "mustache-is-standalone ... "
+echo -n "moIsStandalone ... "
 (
     CR=$'\r'
     LF=$'\n'
     TAB=$'\t'
 
-    mustache-is-standalone RESULT "" "" false && fail "Needs newline before or beginning of content flag"
-    mustache-is-standalone RESULT "" "" true || fail "Has beginning of content flag and no other content"
+    moIsStandalone RESULT "" "" false && fail "Needs newline before or beginning of content flag"
+    moIsStandalone RESULT "" "" true || fail "Has beginning of content flag and no other content"
     [[ "$RESULT" == "0 0" ]] || fail "Wrong returned value for no content '$RESULT'"
-    mustache-is-standalone RESULT "moo" "cow" false && fail "Needs newlines when there is content"
-    mustache-is-standalone RESULT "moo$CR$LF$TAB $TAB " " $TAB $TAB$CR${LF}pasture" false || fail "Has newlines and content but did not flag"
+    moIsStandalone RESULT "moo" "cow" false && fail "Needs newlines when there is content"
+    moIsStandalone RESULT "moo$CR$LF$TAB $TAB " " $TAB $TAB$CR${LF}pasture" false || fail "Has newlines and content but did not flag"
     [[ "$RESULT" == "5 6" ]] || fail "Wrong returned value when there was whitespace '$RESULT'"
 )
 echo "ok"
 
-echo -n "mustache-split ... "
+echo -n "moSplit ... "
 (
-    mustache-split RESULT "abc-def-ghi" "-"
+    moSplit RESULT "abc-def-ghi" "-"
     [[ "${#RESULT[@]}" == "2" ]] || fail "Returned wrong number of elements with one delimiter ${#RESULT[@]}"
     [[ "${RESULT[0]}" == "abc" ]] || fail "Returned wrong left hand string with one delimiter '${RESULT[0]}'"
     [[ "${RESULT[1]}" == "def-ghi" ]] || fail "Returned wrong right hand string with one delimiter '${RESULT[1]}'"
 
-    mustache-split RESULT "abc-def-ghi" "-" "g"
+    moSplit RESULT "abc-def-ghi" "-" "g"
     [[ "${#RESULT[@]}" == "3" ]] || fail "Returned wrong number of elements with two delimiters ${#RESULT[@]}"
     [[ "${RESULT[0]}" == "abc" ]] || fail "Returned wrong left hand string with two delimiters '${RESULT[0]}'"
     [[ "${RESULT[1]}" == "def-" ]] || fail "Returned wrong middle string with two delimiters '${RESULT[1]}'"
@@ -267,34 +269,35 @@ echo -n "mustache-split ... "
 )
 echo "ok"
 
-echo -n "mustache-trim-whitespace ... "
+echo -n "moTrimWhitespace ... "
 (
     CR=$'\r'
     LF=$'\n'
     TAB=$'\t'
 
-    mustache-trim-whitespace RESULT "ab cd"
+    moTrimWhitespace RESULT "ab cd"
     printf -v QUOTED '%q' "$RESULT"
     [[ "${RESULT}" == "ab cd" ]] || fail "Trimmed a string that did not need trimming $QUOTED"
 
-    mustache-trim-whitespace RESULT "$CR$LF$TAB ab $CR$LF$TAB cd $CR$LF$TAB $CR$LF$TAB"
+    moTrimWhitespace RESULT "$CR$LF$TAB ab $CR$LF$TAB cd $CR$LF$TAB $CR$LF$TAB"
     printf -v QUOTED '%q' "$RESULT"
     [[ "${RESULT}" == "ab $CR$LF$TAB cd" ]] || fail "Did not fully trim a string $QUOTED"
 )
 echo "ok"
 
-echo -n "mustache-standalone-allowed ... "
+echo -n "moStandaloneAllowed ... "
 (
-    # Mock mustache-is-standalone to make things simpler
-    mustache-is-standalone() { return 1; }
+    # Mock moIsStandalone to make things simpler
+
+    moIsStandalone() { return 1; }
     
-    mustache-standalone-allowed RESULT before tag after > diagnostic.test
+    moStandaloneAllowed RESULT before tag after > diagnostic.test
     [[ "$(cat diagnostic.test)" == "before" ]] || fail "Did not output content before tag when not standalone '$(cat diagnostic.test)'"
     [[ "$RESULT" == "after" ]] || fail "Did not set the remaining content when not standalone '$RESULT'"
 
-    mustache-is-standalone() { local "$1" && mustache-indirect "$1" "3 5"; return 0; }
+    moIsStandalone() { local "$1" && moIndirect "$1" "3 5"; return 0; }
 
-    mustache-standalone-allowed RESULT before tag afterwards > diagnostic.test
+    moStandaloneAllowed RESULT before tag afterwards > diagnostic.test
     [[ "$(cat diagnostic.test)" == "bef" ]] || fail "Did not output content before tag when standalone '$(cat diagnostic.test)'"
     [[ "$RESULT" == "wards" ]] || fail "Did not set the remaining content when standalone '$RESULT'"
 
@@ -302,29 +305,29 @@ echo -n "mustache-standalone-allowed ... "
 )
 echo "ok"
 
-echo -n "mustache-find-end-tag ... "
+echo -n "moFindEndTag ... "
 (
     LF=$'\n'
 
-    mustache-find-end-tag RESULT "moo{{ / cow }}pasture" "cow"
+    moFindEndTag RESULT "moo{{ / cow }}pasture" "cow"
     [[ "${#RESULT[@]}" == "3" ]] || fail "(simple) Wrong number of elements in the array ${#RESULT[@]}"
     [[ "${RESULT[0]}" == "moo" ]] || fail "(simple) Wrong left-hand '${RESULT[0]}'"
     [[ "${RESULT[1]}" == "{{ / cow }}" ]] || fail "(simple) Wrong middle '${RESULT[1]}'"
     [[ "${RESULT[2]}" == "pasture" ]] || fail "(simple) Wrong right-hand '${RESULT[2]}'"
 
-    mustache-find-end-tag RESULT "moo$LF {{/cow}} $LF pasture" "cow"
+    moFindEndTag RESULT "moo$LF {{/cow}} $LF pasture" "cow"
     [[ "${#RESULT[@]}" == "3" ]] || fail "(standalone) Wrong number of elements in the array ${#RESULT[@]}"
     [[ "${RESULT[0]}" == "moo$LF" ]] || fail "(standalone) Wrong left-hand '${RESULT[0]}'"
     [[ "${RESULT[1]}" == " {{/cow}} $LF" ]] || fail "(standalone) Wrong middle '${RESULT[1]}'"
     [[ "${RESULT[2]}" == " pasture" ]] || fail "(standalone) Wrong right-hand '${RESULT[2]}'"
 
-    mustache-find-end-tag RESULT "aa{{#bb}}cc{{/bb}}dd{{^bb}}ee{{/bb}}ff{{/bb}}gg" "bb"
+    moFindEndTag RESULT "aa{{#bb}}cc{{/bb}}dd{{^bb}}ee{{/bb}}ff{{/bb}}gg" "bb"
     [[ "${#RESULT[@]}" == "3" ]] || fail "(recursive) Wrong number of elements in the array ${#RESULT[@]}"
     [[ "${RESULT[0]}" == "aa{{#bb}}cc{{/bb}}dd{{^bb}}ee{{/bb}}ff" ]] || fail "(recursive) Wrong left-hand '${RESULT[0]}'"
     [[ "${RESULT[1]}" == "{{/bb}}" ]] || fail "(recursive) Wrong middle '${RESULT[1]}'"
     [[ "${RESULT[2]}" == "gg" ]] || fail "(recursive) Wrong right-hand '${RESULT[2]}'"
 
-    mustache-find-end-tag RESULT "aa{{#bb}}cc{{/dd}}ee" "dd"
+    moFindEndTag RESULT "aa{{#bb}}cc{{/dd}}ee" "dd"
     [[ "${#RESULT[@]}" == "3" ]] || fail "(unbalanced) Wrong number of elements in the array ${#RESULT[@]}"
     [[ "${RESULT[0]}" == "aa{{#bb}}cc{{/dd}}ee" ]] || fail "(unbalanced) Wrong left-hand '${RESULT[0]}'"
     [[ "${RESULT[1]}" == "" ]] || fail "(unbalanced) Wrong middle '${RESULT[1]}'"
@@ -332,11 +335,11 @@ echo -n "mustache-find-end-tag ... "
 )
 echo "ok"
 
-echo -n "mustache-loop ... "
+echo -n "moLoop ... "
 (
-    mustache-parse() { echo "parse[$1] context[$2] flag[$3]"; }
+    moParse() { echo "parse[$1] context[$2] flag[$3]"; }
 
-    mustache-loop "content" "prefix" a b c > diagnostic.test
+    moLoop "content" "prefix" a b c > diagnostic.test
     (
         echo "parse[content] context[prefix.a] flag[false]"
         echo "parse[content] context[prefix.b] flag[false]"
@@ -347,18 +350,18 @@ echo -n "mustache-loop ... "
 )
 echo "ok"
 
-echo -n "mustache-partial ... "
+echo -n "moPartial ... "
 (
     NL=$'\n'
-    mustache-parse() { echo "parse[$1] context[$2] flag[$3]"; }
+    moParse() { echo "parse[$1] context[$2] flag[$3]"; }
     echo "partial" > diagnostic.partial
 
-    mustache-partial RESULT "line$NL" ">diagnostic.partial" "  ${NL}line2" false "moo" > diagnostic.test
+    moPartial RESULT "line$NL" ">diagnostic.partial" "  ${NL}line2" false "moo" > diagnostic.test
     [[ "$RESULT" == "line2" ]] || fail "Did not consume newline for standalone '$RESULT'"
     printf -v QUOTED '%q' "$(cat diagnostic.test)"
     [[ "$(cat diagnostic.test)" == "line${NL}parse[partial${NL}] context[moo] flag[true]" ]] || fail "Did not parse right standalone content $QUOTED"
 
-    mustache-partial RESULT "line" ">diagnostic.partial" "line2" false "moo" > diagnostic.test
+    moPartial RESULT "line" ">diagnostic.partial" "line2" false "moo" > diagnostic.test
     [[ "$RESULT" == "line2" ]] || fail "Did not preserve content for non-standalone '$RESULT'"
     printf -v QUOTED '%q' "$(cat diagnostic.test)"
     [[ "$(cat diagnostic.test)" == "lineparse[partial${NL}] context[moo] flag[true]" ]] || fail "Did not parse right non-standalone content $QUOTED"
@@ -367,19 +370,19 @@ echo -n "mustache-partial ... "
 )
 echo "ok"
 
-echo -n "mustache-show ... "
+echo -n "moShow ... "
 (
     aa() { echo "this is aa"; }
     bb="BB"
     cc=( zero one two )
 
-    [[ "$(mustache-show aa)" == "this is aa" ]] || fail "Did not load function"
-    [[ "$(mustache-show bb)" == "BB" ]] || fail "Did not show variable"
-    [[ "$(mustache-show cc.1)" == "one" ]] || fail "Did not show value from indexed array"
+    [[ "$(moShow aa)" == "this is aa" ]] || fail "Did not load function"
+    [[ "$(moShow bb)" == "BB" ]] || fail "Did not show variable"
+    [[ "$(moShow cc.1)" == "one" ]] || fail "Did not show value from indexed array"
 )
 echo "ok"
 
-echo -n "mustache-parse ... skipped (tested by specs)"
+echo -n "moParse ... skipped (tested by specs)"
 
 echo ""
 echo "All diagnostic tests pass"
