@@ -94,8 +94,8 @@ Examples
     callFunc () {
         local "$1" && moIndirect "$1" "the value"
     }
-    callFunc DEST
-    echo "$DEST"  # writes "the value"
+    callFunc dest
+    echo "$dest"  # writes "the value"
 
 Returns nothing.
 
@@ -114,8 +114,8 @@ Examples
         local myArray=(one two three)
         local "$1" && moIndirectArray "$1" "${myArray[@]}"
     }
-    callFunc DEST
-    echo "${DEST[@]}" # writes "one two three"
+    callFunc dest
+    echo "${dest[@]}" # writes "one two three"
 
 Returns nothing.
 

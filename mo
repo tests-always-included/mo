@@ -25,8 +25,9 @@
 #
 # Returns nothing.
 mo() (
-    # This function executes in a subshell so IFS is reset
-    local MUSTACHE_CONTENT
+    # This function executes in a subshell so IFS is reset.
+    # Namespace this variable so we don't conflict with desired values.
+    local moContent
 
     IFS=$' \n\t'
     
@@ -39,8 +40,8 @@ mo() (
         esac
     fi
 
-    moGetContent MUSTACHE_CONTENT "$@"
-    moParse "$MUSTACHE_CONTENT" "" true
+    moGetContent moContent "$@"
+    moParse "$moContent" "" true
 )
 
 
@@ -60,65 +61,65 @@ mo() (
 #
 # Returns nothing.
 moFindEndTag() {
-    local CONTENT SCANNED
+    local content scanned standaloneBytes tag
 
     #: Find open tags
-    SCANNED=""
-    moSplit CONTENT "$2" '{{' '}}'
+    scanned=""
+    moSplit content "$2" '{{' '}}'
 
-    while [[ "${#CONTENT[@]}" -gt 1 ]]; do
-        moTrimWhitespace TAG "${CONTENT[1]}"
+    while [[ "${#content[@]}" -gt 1 ]]; do
+        moTrimWhitespace tag "${content[1]}"
 
-        #: Restore CONTENT[1] before we start using it
-        CONTENT[1]='{{'"${CONTENT[1]}"'}}'
+        #: Restore content[1] before we start using it
+        content[1]='{{'"${content[1]}"'}}'
 
-        case $TAG in
+        case $tag in
             '#'* | '^'*)
                 #: Start another block
-                SCANNED="${SCANNED}${CONTENT[0]}${CONTENT[1]}"
-                moTrimWhitespace TAG "${TAG:1}"
-                moFindEndTag CONTENT "${CONTENT[2]}" "$TAG" "loop"
-                SCANNED="${SCANNED}${CONTENT[0]}${CONTENT[1]}"
-                CONTENT=${CONTENT[2]}
+                scanned="${scanned}${content[0]}${content[1]}"
+                moTrimWhitespace tag "${tag:1}"
+                moFindEndTag content "${content[2]}" "$tag" "loop"
+                scanned="${scanned}${content[0]}${content[1]}"
+                content=${content[2]}
                 ;;
 
             '/'*)
                 #: End a block - could be ours
-                moTrimWhitespace TAG "${TAG:1}"
-                SCANNED="$SCANNED${CONTENT[0]}"
+                moTrimWhitespace tag "${tag:1}"
+                scanned="$scanned${content[0]}"
 
-                if [[ "$TAG" == "$3" ]]; then
+                if [[ "$tag" == "$3" ]]; then
                     #: Found our end tag
-                    if [[ -z "$4" ]] && moIsStandalone STANDALONE_BYTES "$SCANNED" "${CONTENT[2]}" true; then
+                    if [[ -z "$4" ]] && moIsStandalone standaloneBytes "$scanned" "${content[2]}" true; then
                         #: This is also a standalone tag - clean up whitespace
                         #: and move those whitespace bytes to the "tag" element
-                        STANDALONE_BYTES=( $STANDALONE_BYTES )
-                        CONTENT[1]="${SCANNED:${STANDALONE_BYTES[0]}}${CONTENT[1]}${CONTENT[2]:0:${STANDALONE_BYTES[1]}}"
-                        SCANNED="${SCANNED:0:${STANDALONE_BYTES[0]}}"
-                        CONTENT[2]="${CONTENT[2]:${STANDALONE_BYTES[1]}}"
+                        standaloneBytes=( $standaloneBytes )
+                        content[1]="${scanned:${standaloneBytes[0]}}${content[1]}${content[2]:0:${standaloneBytes[1]}}"
+                        scanned="${scanned:0:${standaloneBytes[0]}}"
+                        content[2]="${content[2]:${standaloneBytes[1]}}"
                     fi
 
-                    local "$1" && moIndirectArray "$1" "$SCANNED" "${CONTENT[1]}" "${CONTENT[2]}"
+                    local "$1" && moIndirectArray "$1" "$scanned" "${content[1]}" "${content[2]}"
                     return 0
                 fi
 
-                SCANNED="$SCANNED${CONTENT[1]}"
-                CONTENT=${CONTENT[2]}
+                scanned="$scanned${content[1]}"
+                content=${content[2]}
                 ;;
 
             *)
                 #: Ignore all other tags
-                SCANNED="${SCANNED}${CONTENT[0]}${CONTENT[1]}"
-                CONTENT=${CONTENT[2]}
+                scanned="${scanned}${content[0]}${content[1]}"
+                content=${content[2]}
                 ;;
         esac
 
-        moSplit CONTENT "$CONTENT" '{{' '}}'
+        moSplit content "$content" '{{' '}}'
     done
 
     #: Did not find our closing tag
-    SCANNED="$SCANNED${CONTENT[0]}"
-    local "$1" && moIndirectArray "$1" "${SCANNED}" "" ""
+    scanned="$scanned${content[0]}"
+    local "$1" && moIndirectArray "$1" "${scanned}" "" ""
 }
 
 
@@ -131,11 +132,11 @@ moFindEndTag() {
 #
 # Returns nothing.
 moFindString() {
-    local POS STRING
+    local pos string
 
-    STRING=${2%%$3*}
-    [[ "$STRING" == "$2" ]] && POS=-1 || POS=${#STRING}
-    local "$1" && moIndirect "$1" $POS
+    string=${2%%$3*}
+    [[ "$string" == "$2" ]] && pos=-1 || pos=${#string}
+    local "$1" && moIndirect "$1" $pos
 }
 
 
@@ -163,22 +164,22 @@ moFullTagName() {
 #
 # Returns nothing.
 moGetContent() {
-    local CONTENT FILENAME TARGET
+    local content filename target
 
-    TARGET=$1
+    target=$1
     shift
     if [[ "${#@}" -gt 0 ]]; then
-        CONTENT=""
+        content=""
 
-        for FILENAME in "$@"; do
+        for filename in "$@"; do
             #: This is so relative paths work from inside template files
-            CONTENT="$CONTENT"'{{>'"$FILENAME"'}}'
+            content="$content"'{{>'"$filename"'}}'
         done
     else
-        moLoadFile CONTENT /dev/stdin
+        moLoadFile content /dev/stdin
     fi
 
-    local "$TARGET" && moIndirect "$TARGET" "$CONTENT"
+    local "$target" && moIndirect "$target" "$content"
 }
 
 
@@ -191,51 +192,51 @@ moGetContent() {
 #
 # Returns nothing.
 moIndentLines() {
-    local CONTENT FRAGMENT LEN POS_N POS_R RESULT TRIMMED
+    local content fragment len posN posR result trimmed
 
-    RESULT=""
-    LEN=$((${#3} - 1))
+    result=""
+    len=$((${#3} - 1))
 
     #: This removes newline and dot from the workaround in moPartial
-    CONTENT="${3:0:$LEN}"
+    content="${3:0:$len}"
 
     if [ -z "$2" ]; then
-        local "$1" && moIndirect "$1" "$CONTENT"
+        local "$1" && moIndirect "$1" "$content"
         return 0
     fi
 
-    moFindString POS_N "$CONTENT" $'\n'
-    moFindString POS_R "$CONTENT" $'\r'
+    moFindString posN "$content" $'\n'
+    moFindString posR "$content" $'\r'
 
-    while [[ "$POS_N" -gt -1 ]] || [[ "$POS_R" -gt -1 ]]; do
-        if [[ "$POS_N" -gt -1 ]]; then
-            FRAGMENT="${CONTENT:0:$POS_N + 1}"
-            CONTENT=${CONTENT:$POS_N + 1}
+    while [[ "$posN" -gt -1 ]] || [[ "$posR" -gt -1 ]]; do
+        if [[ "$posN" -gt -1 ]]; then
+            fragment="${content:0:$posN + 1}"
+            content=${content:$posN + 1}
         else
-            FRAGMENT="${CONTENT:0:$POS_R + 1}"
-            CONTENT=${CONTENT:$POS_R + 1}
+            fragment="${content:0:$posR + 1}"
+            content=${content:$posR + 1}
         fi
 
-        moTrimChars TRIMMED "$FRAGMENT" false true " " $'\t' $'\n' $'\r'
+        moTrimChars trimmed "$fragment" false true " " $'\t' $'\n' $'\r'
 
-        if [ ! -z "$TRIMMED" ]; then
-            FRAGMENT="$2$FRAGMENT"
+        if [ ! -z "$trimmed" ]; then
+            fragment="$2$fragment"
         fi
 
-        RESULT="$RESULT$FRAGMENT"
-        moFindString POS_N "$CONTENT" $'\n'
-        moFindString POS_R "$CONTENT" $'\r'
+        result="$result$fragment"
+        moFindString posN "$content" $'\n'
+        moFindString posR "$content" $'\r'
     done
 
-    moTrimChars TRIMMED "$CONTENT" false true " " $'\t'
+    moTrimChars trimmed "$content" false true " " $'\t'
 
-    if [ ! -z "$TRIMMED" ]; then
-        CONTENT="$2$CONTENT"
+    if [ ! -z "$trimmed" ]; then
+        content="$2$content"
     fi
 
-    RESULT="$RESULT$CONTENT"
+    result="$result$content"
 
-    local "$1" && moIndirect "$1" "$RESULT"
+    local "$1" && moIndirect "$1" "$result"
 }
 
 
@@ -249,8 +250,8 @@ moIndentLines() {
 #   callFunc () {
 #       local "$1" && moIndirect "$1" "the value"
 #   }
-#   callFunc DEST
-#   echo "$DEST"  # writes "the value"
+#   callFunc dest
+#   echo "$dest"  # writes "the value"
 #
 # Returns nothing.
 moIndirect() {
@@ -270,8 +271,8 @@ moIndirect() {
 #       local myArray=(one two three)
 #       local "$1" && moIndirectArray "$1" "${myArray[@]}"
 #   }
-#   callFunc DEST
-#   echo "${DEST[@]}" # writes "one two three"
+#   callFunc dest
+#   echo "${dest[@]}" # writes "one two three"
 #
 # Returns nothing.
 moIndirectArray() {
@@ -295,11 +296,12 @@ moIndirectArray() {
 #
 # Returns 0 if the name is not empty, 1 otherwise.
 moIsArray() {
-    local MUSTACHE_TEST
+    # Namespace this variable so we don't conflict with what we're testing.
+    local moTestResult
 
-    MUSTACHE_TEST=$(declare -p "$1" 2>/dev/null) || return 1
-    [[ "${MUSTACHE_TEST:0:10}" == "declare -a" ]] && return 0
-    [[ "${MUSTACHE_TEST:0:10}" == "declare -A" ]] && return 0
+    moTestResult=$(declare -p "$1" 2>/dev/null) || return 1
+    [[ "${moTestResult:0:10}" == "declare -a" ]] && return 0
+    [[ "${moTestResult:0:10}" == "declare -A" ]] && return 0
 
     return 1
 }
@@ -320,13 +322,13 @@ moIsArray() {
 #
 # Returns 0 if the name is a function, 1 otherwise.
 moIsFunction() {
-    local FUNCTIONS NAME
+    local functionList functionName
 
-    FUNCTIONS=$(declare -F)
-    FUNCTIONS=( ${FUNCTIONS//declare -f /} )
+    functionList=$(declare -F)
+    functionList=( ${functionList//declare -f /} )
 
-    for NAME in ${FUNCTIONS[@]}; do
-        if [[ "$NAME" == "$1" ]]; then
+    for functionName in ${functionList[@]}; do
+        if [[ "$functionName" == "$1" ]]; then
             return 0
         fi
     done
@@ -356,30 +358,30 @@ moIsFunction() {
 #
 # Returns nothing.
 moIsStandalone() {
-    local AFTER_TRIMMED BEFORE_TRIMMED CHAR
+    local afterTrimmed beforeTrimmed char
 
-    moTrimChars BEFORE_TRIMMED "$2" false true " " $'\t'
-    moTrimChars AFTER_TRIMMED "$3" true false " " $'\t'
-    CHAR=$((${#BEFORE_TRIMMED} - 1))
-    CHAR=${BEFORE_TRIMMED:$CHAR}
+    moTrimChars beforeTrimmed "$2" false true " " $'\t'
+    moTrimChars afterTrimmed "$3" true false " " $'\t'
+    char=$((${#beforeTrimmed} - 1))
+    char=${beforeTrimmed:$char}
 
-    if [[ "$CHAR" != $'\n' ]] && [[ "$CHAR" != $'\r' ]]; then
-        if [[ ! -z "$CHAR" ]] || ! $4; then
+    if [[ "$char" != $'\n' ]] && [[ "$char" != $'\r' ]]; then
+        if [[ ! -z "$char" ]] || ! $4; then
             return 1
         fi
     fi
 
-    CHAR=${AFTER_TRIMMED:0:1}
+    char=${afterTrimmed:0:1}
 
-    if [[ "$CHAR" != $'\n' ]] && [[ "$CHAR" != $'\r' ]] && [[ ! -z "$CHAR" ]]; then
+    if [[ "$char" != $'\n' ]] && [[ "$char" != $'\r' ]] && [[ ! -z "$char" ]]; then
         return 2
     fi
 
-    if [[ "$CHAR" == $'\r' ]] && [[ "${AFTER_TRIMMED:1:1}" == $'\n' ]]; then
-        CHAR="$CHAR"$'\n'
+    if [[ "$char" == $'\r' ]] && [[ "${afterTrimmed:1:1}" == $'\n' ]]; then
+        char="$char"$'\n'
     fi
 
-    local "$1" && moIndirect "$1" "$((${#BEFORE_TRIMMED})) $((${#3} + ${#CHAR} - ${#AFTER_TRIMMED}))"
+    local "$1" && moIndirect "$1" "$((${#beforeTrimmed})) $((${#3} + ${#char} - ${#afterTrimmed}))"
 }
 
 
@@ -391,19 +393,20 @@ moIsStandalone() {
 #
 # Returns nothing.
 moJoin() {
-    local JOINER PART RESULT TARGET
+    local joiner part result target
 
-    TARGET=$1
-    JOINER=$2
-    RESULT=$3
+    target=$1
+    joiner=$2
+    result=$3
     shift 3
 
-    for PART in "$@"; do
-        RESULT="$RESULT$JOINER$PART"
+    for part in "$@"; do
+        result="$result$joiner$part"
     done
 
-    local "$TARGET" && moIndirect "$TARGET" "$RESULT"
+    local "$target" && moIndirect "$target" "$result"
 }
+
 
 # Internal: Read a file into a variable.
 #
@@ -412,17 +415,17 @@ moJoin() {
 #
 # Returns nothing.
 moLoadFile() {
-    local CONTENT LEN
+    local content len
 
     # The subshell removes any trailing newlines.  We forcibly add
     # a dot to the content to preserve all newlines.
     # TODO: remove cat and replace with read loop?
 
-    CONTENT=$(cat $2; echo '.')
-    LEN=$((${#CONTENT} - 1))
-    CONTENT=${CONTENT:0:$LEN}  # Remove last dot
+    content=$(cat $2; echo '.')
+    len=$((${#content} - 1))
+    content=${content:0:$len}  # Remove last dot
 
-    local "$1" && moIndirect "$1" "$CONTENT"
+    local "$1" && moIndirect "$1" "$content"
 }
 
 
@@ -435,15 +438,15 @@ moLoadFile() {
 #
 # Returns nothing.
 moLoop() {
-    local CONTENT CONTEXT CONTEXT_BASE IGNORE
+    local content context contextBase
 
-    CONTENT=$1
-    CONTEXT_BASE=$2
+    content=$1
+    contextBase=$2
     shift 2
 
     while [[ "${#@}" -gt 0 ]]; do
-        moFullTagName CONTEXT "$CONTEXT_BASE" "$1"
-        moParse "$CONTENT" "$CONTEXT" false
+        moFullTagName context "$contextBase" "$1"
+        moParse "$content" "$context" false
         shift
     done
 }
@@ -457,124 +460,124 @@ moLoop() {
 #
 # Returns nothing.
 moParse() {
-    # Keep naming variables MUSTACHE_* here to not overwrite needed variables
+    # Keep naming variables mo* here to not overwrite needed variables
     # used in the string replacements
-    local MUSTACHE_BLOCK MUSTACHE_CONTENT MUSTACHE_CURRENT MUSTACHE_IS_BEGINNING MUSTACHE_TAG
+    local moBlock moContent moCurrent moIsBeginning moTag
 
-    MUSTACHE_CURRENT=$2
-    MUSTACHE_IS_BEGINNING=$3
+    moCurrent=$2
+    moIsBeginning=$3
 
     # Find open tags
-    moSplit MUSTACHE_CONTENT "$1" '{{' '}}'
+    moSplit moContent "$1" '{{' '}}'
 
-    while [[ "${#MUSTACHE_CONTENT[@]}" -gt 1 ]]; do
-        moTrimWhitespace MUSTACHE_TAG "${MUSTACHE_CONTENT[1]}"
+    while [[ "${#moContent[@]}" -gt 1 ]]; do
+        moTrimWhitespace moTag "${moContent[1]}"
 
-        case $MUSTACHE_TAG in
+        case $moTag in
             '#'*)
                 # Loop, if/then, or pass content through function
                 # Sets context
-                moStandaloneAllowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
-                moTrimWhitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
-                moFindEndTag MUSTACHE_BLOCK "$MUSTACHE_CONTENT" "$MUSTACHE_TAG"
-                moFullTagName MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
+                moStandaloneAllowed moContent "${moContent[@]}" $moIsBeginning
+                moTrimWhitespace moTag "${moTag:1}"
+                moFindEndTag moBlock "$moContent" "$moTag"
+                moFullTagName moTag "$moCurrent" "$moTag"
 
-                if moTest "$MUSTACHE_TAG"; then
+                if moTest "$moTag"; then
                     # Show / loop / pass through function
-                    if moIsFunction "$MUSTACHE_TAG"; then
+                    if moIsFunction "$moTag"; then
                         #: TODO: Consider piping the output to moGetContent
                         #: so the lambda does not execute in a subshell?
-                        MUSTACHE_CONTENT=$($MUSTACHE_TAG "${MUSTACHE_BLOCK[0]}")
-                        moParse "$MUSTACHE_CONTENT" "$MUSTACHE_CURRENT" false
-                        MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
-                    elif moIsArray "$MUSTACHE_TAG"; then
-                        eval 'moLoop "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_TAG" "${!'"$MUSTACHE_TAG"'[@]}"'
+                        moContent=$($moTag "${moBlock[0]}")
+                        moParse "$moContent" "$moCurrent" false
+                        moContent="${moBlock[2]}"
+                    elif moIsArray "$moTag"; then
+                        eval 'moLoop "${moBlock[0]}" "$moTag" "${!'"$moTag"'[@]}"'
                     else
-                        moParse "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false
+                        moParse "${moBlock[0]}" "$moCurrent" false
                     fi
                 fi
 
-                MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
+                moContent="${moBlock[2]}"
                 ;;
 
             '>'*)
                 # Load partial - get name of file relative to cwd
-                moPartial MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING "$MUSTACHE_CURRENT"
+                moPartial moContent "${moContent[@]}" $moIsBeginning "$moCurrent"
                 ;;
 
             '/'*)
                 # Closing tag - If hit in this loop, we simply ignore
                 # Matching tags are found in moFindEndTag
-                moStandaloneAllowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
+                moStandaloneAllowed moContent "${moContent[@]}" $moIsBeginning
                 ;;
 
             '^'*)
                 # Display section if named thing does not exist
-                moStandaloneAllowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
-                moTrimWhitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
-                moFindEndTag MUSTACHE_BLOCK "$MUSTACHE_CONTENT" "$MUSTACHE_TAG"
-                moFullTagName MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
+                moStandaloneAllowed moContent "${moContent[@]}" $moIsBeginning
+                moTrimWhitespace moTag "${moTag:1}"
+                moFindEndTag moBlock "$moContent" "$moTag"
+                moFullTagName moTag "$moCurrent" "$moTag"
 
-                if ! moTest "$MUSTACHE_TAG"; then
-                    moParse "${MUSTACHE_BLOCK[0]}" "$MUSTACHE_CURRENT" false "$MUSTACHE_CURRENT"
+                if ! moTest "$moTag"; then
+                    moParse "${moBlock[0]}" "$moCurrent" false "$moCurrent"
                 fi
 
-                MUSTACHE_CONTENT="${MUSTACHE_BLOCK[2]}"
+                moContent="${moBlock[2]}"
                 ;;
 
             '!'*)
                 # Comment - ignore the tag content entirely
                 # Trim spaces/tabs before the comment
-                moStandaloneAllowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
+                moStandaloneAllowed moContent "${moContent[@]}" $moIsBeginning
                 ;;
 
             .)
                 # Current content (environment variable or function)
-                moStandaloneDenied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
-                moShow "$MUSTACHE_CURRENT" "$MUSTACHE_CURRENT"
+                moStandaloneDenied moContent "${moContent[@]}"
+                moShow "$moCurrent" "$moCurrent"
                 ;;
 
             '=')
                 # Change delimiters
                 # Any two non-whitespace sequences separated by whitespace.
                 # TODO
-                moStandaloneAllowed MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}" $MUSTACHE_IS_BEGINNING
+                moStandaloneAllowed moContent "${moContent[@]}" $moIsBeginning
                 ;;
 
             '{'*)
                 # Unescaped - split on }}} not }}
-                moStandaloneDenied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
-                MUSTACHE_CONTENT="${MUSTACHE_TAG:1}"'}}'"$MUSTACHE_CONTENT"
-                moSplit MUSTACHE_CONTENT "$MUSTACHE_CONTENT" '}}}'
-                moTrimWhitespace MUSTACHE_TAG "${MUSTACHE_CONTENT[0]}"
-                moFullTagName MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
-                MUSTACHE_CONTENT=${MUSTACHE_CONTENT[1]}
+                moStandaloneDenied moContent "${moContent[@]}"
+                moContent="${moTag:1}"'}}'"$moContent"
+                moSplit moContent "$moContent" '}}}'
+                moTrimWhitespace moTag "${moContent[0]}"
+                moFullTagName moTag "$moCurrent" "$moTag"
+                moContent=${moContent[1]}
 
                 # Now show the value
-                moShow "$MUSTACHE_TAG" "$MUSTACHE_CURRENT"
+                moShow "$moTag" "$moCurrent"
                 ;;
 
             '&'*)
                 # Unescaped
-                moStandaloneDenied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
-                moTrimWhitespace MUSTACHE_TAG "${MUSTACHE_TAG:1}"
-                moFullTagName MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
-                moShow "$MUSTACHE_TAG" "$MUSTACHE_CURRENT"
+                moStandaloneDenied moContent "${moContent[@]}"
+                moTrimWhitespace moTag "${moTag:1}"
+                moFullTagName moTag "$moCurrent" "$moTag"
+                moShow "$moTag" "$moCurrent"
                 ;;
 
             *)
                 # Normal environment variable or function call
-                moStandaloneDenied MUSTACHE_CONTENT "${MUSTACHE_CONTENT[@]}"
-                moFullTagName MUSTACHE_TAG "$MUSTACHE_CURRENT" "$MUSTACHE_TAG"
-                moShow "$MUSTACHE_TAG" "$MUSTACHE_CURRENT"
+                moStandaloneDenied moContent "${moContent[@]}"
+                moFullTagName moTag "$moCurrent" "$moTag"
+                moShow "$moTag" "$moCurrent"
                 ;;
         esac
 
-        MUSTACHE_IS_BEGINNING=false
-        moSplit MUSTACHE_CONTENT "$MUSTACHE_CONTENT" '{{' '}}'
+        moIsBeginning=false
+        moSplit moContent "$moContent" '{{' '}}'
     done
 
-    echo -n "${MUSTACHE_CONTENT[0]}"
+    echo -n "${moContent[0]}"
 }
 
 
@@ -593,36 +596,37 @@ moParse() {
 #
 # Returns nothing.
 moPartial() {
-    local MUSTACHE_CONTENT MUSTACHE_FILENAME MUSTACHE_INDENT MUSTACHE_LINE MUSTACHE_PARTIAL MUSTACHE_STANDALONE
+    # Namespace variables here to prevent conflicts.
+    local moContent moFilename moIndent moPartial moStandalone
 
-    if moIsStandalone MUSTACHE_STANDALONE "$2" "$4" $5; then
-        MUSTACHE_STANDALONE=( $MUSTACHE_STANDALONE )
-        echo -n "${2:0:${MUSTACHE_STANDALONE[0]}}"
-        MUSTACHE_INDENT=${2:${MUSTACHE_STANDALONE[0]}}
-        MUSTACHE_CONTENT=${4:${MUSTACHE_STANDALONE[1]}}
+    if moIsStandalone moStandalone "$2" "$4" $5; then
+        moStandalone=( $moStandalone )
+        echo -n "${2:0:${moStandalone[0]}}"
+        moIndent=${2:${moStandalone[0]}}
+        moContent=${4:${moStandalone[1]}}
     else
-        MUSTACHE_INDENT=""
+        moIndent=""
         echo -n "$2"
-        MUSTACHE_CONTENT=$4
+        moContent=$4
     fi
 
-    moTrimWhitespace MUSTACHE_FILENAME "${3:1}"
+    moTrimWhitespace moFilename "${3:1}"
 
     # Execute in subshell to preserve current cwd and environment
     (
         # TODO:  Remove dirname and use a function instead
-        cd "$(dirname "$MUSTACHE_FILENAME")"
-        moIndentLines MUSTACHE_PARTIAL "$MUSTACHE_INDENT" "$(
-            moLoadFile MUSTACHE_PARTIAL "${MUSTACHE_FILENAME##*/}"
+        cd "$(dirname "$moFilename")"
+        moIndentLines moPartial "$moIndent" "$(
+            moLoadFile moPartial "${moFilename##*/}"
 
             # Fix bash handling of subshells
             # The extra dot is removed in moIndentLines
-            echo -n "${MUSTACHE_PARTIAL}."
+            echo -n "${moPartial}."
         )"
-        moParse "$MUSTACHE_PARTIAL" "$6" true
+        moParse "$moPartial" "$6" true
     )
 
-    local "$1" && moIndirect "$1" "$MUSTACHE_CONTENT"
+    local "$1" && moIndirect "$1" "$moContent"
 }
 
 
@@ -636,7 +640,8 @@ moPartial() {
 #
 # Returns nothing.
 moShow() {
-    local JOINED MUSTACHE_NAME_PARTS
+    # Namespace these variables
+    local moJoined moNameParts
 
     if moIsFunction "$1"; then
         CONTENT=$($1 "")
@@ -644,18 +649,18 @@ moShow() {
         return 0
     fi
 
-    moSplit MUSTACHE_NAME_PARTS "$1" "."
+    moSplit moNameParts "$1" "."
 
-    if [[ -z "${MUSTACHE_NAME_PARTS[1]}" ]]; then
+    if [[ -z "${moNameParts[1]}" ]]; then
         if moIsArray "$1"; then
-            eval moJoin JOINED "," "\${$1[@]}"
-            echo -n "$JOINED"
+            eval moJoin moJoined "," "\${$1[@]}"
+            echo -n "$moJoined"
         else
             echo -n "${!1}"
         fi
     else
         # Further subindexes are disallowed
-        eval 'echo -n "${'"${MUSTACHE_NAME_PARTS[0]}"'['"${MUSTACHE_NAME_PARTS[1]%%.*}"']}"'
+        eval 'echo -n "${'"${moNameParts[0]}"'['"${moNameParts[1]%%.*}"']}"'
     fi
 }
 
@@ -669,28 +674,28 @@ moShow() {
 #
 # Returns nothing.
 moSplit() {
-    local POS RESULT
+    local pos result
 
-    RESULT=( "$2" )
-    moFindString POS "${RESULT[0]}" "$3"
+    result=( "$2" )
+    moFindString pos "${result[0]}" "$3"
 
-    if [[ "$POS" -ne -1 ]]; then
+    if [[ "$pos" -ne -1 ]]; then
         # The first delimiter was found
-        RESULT[1]=${RESULT[0]:$POS + ${#3}}
-        RESULT[0]=${RESULT[0]:0:$POS}
+        result[1]=${result[0]:$pos + ${#3}}
+        result[0]=${result[0]:0:$pos}
 
         if [[ ! -z "$4" ]]; then
-            moFindString POS "${RESULT[1]}" "$4"
+            moFindString pos "${result[1]}" "$4"
 
-            if [[ "$POS" -ne -1 ]]; then
+            if [[ "$pos" -ne -1 ]]; then
                 # The second delimiter was found
-                RESULT[2]="${RESULT[1]:$POS + ${#4}}"
-                RESULT[1]="${RESULT[1]:0:$POS}"
+                result[2]="${result[1]:$pos + ${#4}}"
+                result[1]="${result[1]:0:$pos}"
             fi
         fi
     fi
 
-    local "$1" && moIndirectArray "$1" "${RESULT[@]}"
+    local "$1" && moIndirectArray "$1" "${result[@]}"
 }
 
 
@@ -706,12 +711,12 @@ moSplit() {
 #
 # Returns nothing.
 moStandaloneAllowed() {
-    local STANDALONE_BYTES
+    local bytes
 
-    if moIsStandalone STANDALONE_BYTES "$2" "$4" $5; then
-        STANDALONE_BYTES=( $STANDALONE_BYTES )
-        echo -n "${2:0:${STANDALONE_BYTES[0]}}"
-        local "$1" && moIndirect "$1" "${4:${STANDALONE_BYTES[1]}}"
+    if moIsStandalone bytes "$2" "$4" $5; then
+        bytes=( $bytes )
+        echo -n "${2:0:${bytes[0]}}"
+        local "$1" && moIndirect "$1" "${4:${bytes[1]}}"
     else
         echo -n "$2"
         local "$1" && moIndirect "$1" "$4"
@@ -770,25 +775,25 @@ moTest() {
 #
 # Returns nothing.
 moTrimChars() {
-    local BACK CURRENT FRONT LAST TARGET VAR
+    local back current front last target varName
 
-    TARGET=$1
-    CURRENT=$2
-    FRONT=$3
-    BACK=$4
-    LAST=""
+    target=$1
+    current=$2
+    front=$3
+    back=$4
+    last=""
     shift 4 # Remove target, string, trim front flag, trim end flag
 
-    while [[ "$CURRENT" != "$LAST" ]]; do
-        LAST=$CURRENT
+    while [[ "$current" != "$last" ]]; do
+        last=$current
 
-        for VAR in "$@"; do
-            $FRONT && CURRENT="${CURRENT/#$VAR}"
-            $BACK && CURRENT="${CURRENT/%$VAR}"
+        for varName in "$@"; do
+            $front && current="${current/#$varName}"
+            $back && current="${current/%$varName}"
         done
     done
 
-    local "$TARGET" && moIndirect "$TARGET" "$CURRENT"
+    local "$target" && moIndirect "$target" "$current"
 }
 
 
@@ -799,10 +804,10 @@ moTrimChars() {
 #
 # Returns nothing.
 moTrimWhitespace() {
-    local RESULT
+    local result
 
-    moTrimChars RESULT "$2" true true $'\r' $'\n' $'\t' " "
-    local "$1" && moIndirect "$1" "$RESULT"
+    moTrimChars result "$2" true true $'\r' $'\n' $'\t' " "
+    local "$1" && moIndirect "$1" "$result"
 }
 
 
