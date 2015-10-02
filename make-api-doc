@@ -1,0 +1,20 @@
+#!/bin/bash
+#
+# This requires tomdoc.sh to be in your PATH.
+# https://github.com/mlafeldt/tomdoc.sh
+
+cd "${0%/*}"
+
+cat <<'EOF'
+API / Function Documentation
+============================
+
+This documentation is generated automatically from the source of [mo] thanks to [tomdoc.sh].
+
+
+EOF
+tomdoc.sh -m mo
+cat <<'EOF'
+[mo]: ./mo
+[tomdoc.sh]: https://github.com/mlafeldt/tomdoc.sh
+EOF
