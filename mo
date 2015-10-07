@@ -160,7 +160,7 @@ moFullTagName() {
 # partials for files or the content from stdin.
 #
 # $1   - Variable name to assign this content back as
-# $2-* - File names (optional)
+# $2-@ - File names (optional)
 #
 # Returns nothing.
 moGetContent() {
@@ -263,7 +263,7 @@ moIndirect() {
 # Internal: Send an array as a variable up to caller of a function
 #
 # $1   - Variable name
-# $2-* - Array elements
+# $2-@ - Array elements
 #
 # Examples
 #
@@ -434,7 +434,7 @@ moLoadFile() {
 #
 # $1   - Content to parse repeatedly
 # $2   - Tag prefix (context name)
-# $3-* - Names to insert into the parsed content
+# $3-@ - Names to insert into the parsed content
 #
 # Returns nothing.
 moLoop() {
@@ -771,7 +771,7 @@ moTest() {
 # $2   - The string
 # $3   - true/false - trim front?
 # $4   - true/false - trim end?
-# $5-* - Characters to trim
+# $5-@ - Characters to trim
 #
 # Returns nothing.
 moTrimChars() {
