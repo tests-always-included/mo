@@ -820,7 +820,7 @@ moTrimWhitespace() {
 #
 # Returns nothing.
 moUsage() {
-    grep '^#/' < "$1" | cut -c 4-
+    grep '^#/' "$1" | cut -c 4-
 }
 
 
