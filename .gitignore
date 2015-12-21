@@ -2,4 +2,5 @@
 diagnostic.partial
 diagnostic.test
 tests/*.diff
+spec/
 spec-runner/

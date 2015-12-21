@@ -88,7 +88,11 @@ Developing
 
 Check out the code and hack away.  Please add tests to show off bugs before fixing them.  New functionality should also be covered by a test.
 
-To run against the official specs, you need to make sure you have the "spec" submodule.  If you see a `spec/` folder with stuff in it, you're already set.  Otherwise run `git submodule update --init`.  After that you need to install node.js and run `npm install async` (no, I didn't make a package.json to just list one dependency).  Finally, `./run-spec.js spec/specs/*.json` will run against the official tests - there's over 100 of them.
+First you need to get the official tests.  This command will pull them down and put those tests into a "spec" folder.
+
+    git clone https://github.com/mustache/spec.git spec
+
+After that you need to install node.js and run `npm install async` (no, I didn't make a package.json to just list one dependency).  Finally, `./run-spec.js spec/specs/*.json` will run against the official tests - there's over 100 of them.
 
 
 ### Porting and Backporting
