@@ -327,7 +327,7 @@ moIsFunction() {
     functionList=$(declare -F)
     functionList=( ${functionList//declare -f /} )
 
-    for functionName in ${functionList[@]}; do
+    for functionName in "${functionList[@]}"; do
         if [[ "$functionName" == "$1" ]]; then
             return 0
         fi
