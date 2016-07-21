@@ -19,45 +19,59 @@
 
 # Public: Template parser function.  Writes templates to stdout.
 #
-# $0 - Name of the mo file, used for getting the help message.
-# $* - Filenames to parse.  Can use -h or --help as the only option
-#      in order to show a help message. Additionaly, --source=file
-#      can be passed so that mo sources the file before parsing
-#      the filenames
+# $0            - Name of the mo file, used for getting the help message.
+# --help        - Display a help message.
+# --source=FILE - Source a file into the environment before processint
+#                 template files.
+# --            - Used to indicate the end of options.  You may optionally
+#                 use this when filenames may start with two hyphens.
+# $@            - Filenames to parse.
 #
 # Returns nothing.
 mo() (
     # This function executes in a subshell so IFS is reset.
     # Namespace this variable so we don't conflict with desired values.
-    local moContent f2source files
+    local moContent f2source files doubleHyphens
 
     IFS=$' \n\t'
     files=()
+    doubleHyphens=false
 
     if [[ $# -gt 0 ]]; then
         for arg in "$@"; do
-            case "$arg" in
-                -h|--h|--he|--hel|--help)
-                    moUsage "$0"
-                    exit 0
-                    ;;
+            if $doubleHyphens; then
+                # After we encounter two hyphens together, all the rest
+                # of the arguments are files.
+                files=("${files[@]}" "$arg")
+            else
+                case "$arg" in
+                    -h|--h|--he|--hel|--help)
+                        moUsage "$0"
+                        exit 0
+                        ;;
 
-                --source=*)
-                    f2source="${1#--source=}"
+                    --source=*)
+                        f2source="${1#--source=}"
 
-                    if [[ -f "$f2source" ]]; then
-                        . "$f2source"
-                    else
-                        echo "No such file: $f2source" >&2
-                        exit 1
-                    fi
-                    ;;
+                        if [[ -f "$f2source" ]]; then
+                            . "$f2source"
+                        else
+                            echo "No such file: $f2source" >&2
+                            exit 1
+                        fi
+                        ;;
 
-                *)
-                    # Every arg that is not a flag or a option should be a file
-                    files=("${files[@]}" "$arg")
-                    ;;
-            esac
+                    --)
+                        # Set a flag indicating we've encountered double hyphens
+                        doubleHyphens=true
+                        ;;
+
+                    *)
+                        # Every arg that is not a flag or a option should be a file
+                        files=("${files[@]}" "$arg")
+                        ;;
+                esac
+            fi
         done
     fi
 
@@ -442,7 +456,7 @@ moLoadFile() {
     # a dot to the content to preserve all newlines.
     # TODO: remove cat and replace with read loop?
 
-    content=$(cat $2; echo '.')
+    content=$(cat -- $2; echo '.')
     len=$((${#content} - 1))
     content=${content:0:$len}  # Remove last dot
 
@@ -636,7 +650,7 @@ moPartial() {
     # Execute in subshell to preserve current cwd and environment
     (
         # TODO:  Remove dirname and use a function instead
-        cd "$(dirname "$moFilename")"
+        cd "$(dirname -- "$moFilename")"
         moIndentLines moPartial "$moIndent" "$(
             moLoadFile moPartial "${moFilename##*/}"
 
