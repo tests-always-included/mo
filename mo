@@ -21,7 +21,9 @@
 #
 # $0 - Name of the mo file, used for getting the help message.
 # $* - Filenames to parse.  Can use -h or --help as the only option
-#      in order to show a help message.
+#      in order to show a help message. Additionaly, --source=file
+#      can be passed so that mo sources the file before parsing
+#      the filenames.
 #
 # Returns nothing.
 mo() (
@@ -30,12 +32,17 @@ mo() (
     local moContent
 
     IFS=$' \n\t'
-    
+
     if [[ $# -gt 0 ]]; then
         case "$1" in
             -h|--h|--he|--hel|--help)
                 moUsage "$0"
                 exit 0
+                ;;
+
+            --source=*)
+                . "${1#--source=}"
+                shift 1
                 ;;
         esac
     fi
