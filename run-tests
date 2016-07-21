@@ -10,9 +10,16 @@ for TEST in tests/*.expected; do
     BASE="${TEST%.expected}"
 
     echo -n "$BASE ... "
-    echo "Do not read this input" | (
-        . "${BASE}.env"
-        mo "${BASE}.template"
+
+    (
+        if [[ -f "${BASE}.sh" ]]; then
+            # Run a shell script if one exists
+            "${BASE}.sh"
+        else
+            # Fall back to using .env and .template
+            . "${BASE}.env"
+            echo "Do not read this input" | mo "${BASE}.template"
+        fi
     ) | diff -wU5 - "${TEST}" > "${BASE}.diff"
 
     if [[ $? -ne 0 ]]; then
