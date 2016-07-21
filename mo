@@ -21,26 +21,46 @@
 #
 # $0 - Name of the mo file, used for getting the help message.
 # $* - Filenames to parse.  Can use -h or --help as the only option
-#      in order to show a help message.
+#      in order to show a help message. Additionaly, --source=file
+#      can be passed so that mo sources the file before parsing
+#      the filenames.
 #
 # Returns nothing.
 mo() (
     # This function executes in a subshell so IFS is reset.
     # Namespace this variable so we don't conflict with desired values.
-    local moContent
+    local moContent files=()
 
     IFS=$' \n\t'
-    
+
     if [[ $# -gt 0 ]]; then
-        case "$1" in
-            -h|--h|--he|--hel|--help)
-                moUsage "$0"
-                exit 0
-                ;;
-        esac
+        for arg in "$@"; do
+            case "$arg" in
+                -h|--h|--he|--hel|--help)
+                    moUsage "$0"
+                    exit 0
+                    ;;
+
+                --source=*)
+                    local f2source="${1#--source=}"
+                    if [[ -f "$f2source" ]]; then
+                        . "$f2source"
+                        continue
+                    else
+                        printf "%s: %s: %s\n"\
+                               "$0" "$f2source" "No such file" >&2
+                        exit 1
+                    fi
+                    ;;
+
+                *) # Every arg that is not a flag or a option should be a file
+                    files+=("$arg")
+                    ;;
+            esac
+        done
     fi
 
-    moGetContent moContent "$@"
+    moGetContent moContent "${files[@]}"
     moParse "$moContent" "" true
 )
 

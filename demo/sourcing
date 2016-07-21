@@ -1,0 +1,13 @@
+#!/bin/bash
+#
+# This sources a simple script with the env. variables needed for the template.
+
+cd "$(dirname "$0")" # Go to the script's directory
+
+cat <<EOF | ../mo --source=sourcing.vars
+Hello, my name is {{NAME}}.
+And this is ARRAY's conntents:
+{{#ARRAY}}
+    * {{.}}
+{{/ARRAY}}
+EOF
