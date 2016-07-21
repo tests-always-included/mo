@@ -23,15 +23,16 @@
 # $* - Filenames to parse.  Can use -h or --help as the only option
 #      in order to show a help message. Additionaly, --source=file
 #      can be passed so that mo sources the file before parsing
-#      the filenames.
+#      the filenames
 #
 # Returns nothing.
 mo() (
     # This function executes in a subshell so IFS is reset.
     # Namespace this variable so we don't conflict with desired values.
-    local moContent files=()
+    local moContent f2source files
 
     IFS=$' \n\t'
+    files=()
 
     if [[ $# -gt 0 ]]; then
         for arg in "$@"; do
@@ -42,19 +43,19 @@ mo() (
                     ;;
 
                 --source=*)
-                    local f2source="${1#--source=}"
+                    f2source="${1#--source=}"
+
                     if [[ -f "$f2source" ]]; then
                         . "$f2source"
-                        continue
                     else
-                        printf "%s: %s: %s\n"\
-                               "$0" "$f2source" "No such file" >&2
+                        echo "No such file: $f2source" >&2
                         exit 1
                     fi
                     ;;
 
-                *) # Every arg that is not a flag or a option should be a file
-                    files+=("$arg")
+                *)
+                    # Every arg that is not a flag or a option should be a file
+                    files=("${files[@]}" "$arg")
                     ;;
             esac
         done
