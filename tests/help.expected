@@ -1,0 +1,8 @@
+Mo is a mustache template rendering software written in bash.  It inserts
+environment variables into templates.
+
+Simply put, mo will change {{VARIABLE}} into the value of that
+environment variable.  You can use {{#VARIABLE}}content{{/VARIABLE}} to
+conditionally display content or iterate over the values of an array.
+
+Learn more about mustache templates at https://mustache.github.io/
