@@ -4,11 +4,6 @@
 
 cd "$(dirname "$0")" # Go to the script's directory
 
-cat <<EOF >sourcing.vars
-export NAME="Alex"
-export ARRAY=( AAA BBB CCC )
-EOF
-
 cat <<EOF | ../mo --source=sourcing.vars
 Hello, my name is {{NAME}}.
 And this is ARRAY's conntents:

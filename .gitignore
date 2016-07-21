@@ -4,4 +4,3 @@ diagnostic.test
 tests/*.diff
 spec/
 spec-runner/
-demo/sourcing.vars

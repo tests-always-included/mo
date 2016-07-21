@@ -29,25 +29,38 @@
 mo() (
     # This function executes in a subshell so IFS is reset.
     # Namespace this variable so we don't conflict with desired values.
-    local moContent
+    local moContent files=()
 
     IFS=$' \n\t'
 
     if [[ $# -gt 0 ]]; then
-        case "$1" in
-            -h|--h|--he|--hel|--help)
-                moUsage "$0"
-                exit 0
-                ;;
+        for arg in "$@"; do
+            case "$arg" in
+                -h|--h|--he|--hel|--help)
+                    moUsage "$0"
+                    exit 0
+                    ;;
 
-            --source=*)
-                . "${1#--source=}"
-                shift 1
-                ;;
-        esac
+                --source=*)
+                    local f2source="${1#--source=}"
+                    if [[ -f "$f2source" ]]; then
+                        . "$f2source"
+                        continue
+                    else
+                        printf "%s: %s: %s\n"\
+                               "$0" "$f2source" "No such file" >&2
+                        exit 1
+                    fi
+                    ;;
+
+                *) # Every arg that is not a flag or a option should be a file
+                    files+=("$arg")
+                    ;;
+            esac
+        done
     fi
 
-    moGetContent moContent "$@"
+    moGetContent moContent "${files[@]}"
     moParse "$moContent" "" true
 )
 
