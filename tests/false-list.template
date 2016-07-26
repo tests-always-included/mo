@@ -2,3 +2,6 @@ Shown.
 {{#person}}
   Never shown!
 {{/person}}
+{{#falsy}}
+  As well !
+{{/falsy}}
