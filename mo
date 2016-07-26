@@ -775,15 +775,14 @@ moStandaloneDenied() {
 
 
 # Internal: Determines if the named thing is a function or if it is a
-# non-empty environment variable.
+# non-empty, not false environment variable.
 #
 # Do not use variables without prefixes here if possible as this needs to
 # check if any name exists in the environment
 #
 # $1 - Name of environment variable or function
-# $2 - Current value (our context)
 #
-# Returns 0 if the name is not empty, 1 otherwise.
+# Returns 0 if the name is not empty nor false, 1 otherwise.
 moTest() {
     # Test for functions
     moIsFunction "$1" && return 0
@@ -792,8 +791,8 @@ moTest() {
         # Arrays must have at least 1 element
         eval '[[ "${#'"$1"'[@]}" -gt 0 ]]' && return 0
     else
-        # Environment variables must not be empty
-        [[ ! -z "${!1}" ]] && return 0
+        # Environment variables must not be empty nor false
+        [[ ! -z "${!1}" ]] && eval '[[ "$'"$1"'" != "false" ]]'  && return 0
     fi
 
     return 1
