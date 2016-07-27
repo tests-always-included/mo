@@ -6,3 +6,11 @@ environment variable.  You can use {{#VARIABLE}}content{{/VARIABLE}} to
 conditionally display content or iterate over the values of an array.
 
 Learn more about mustache templates at https://mustache.github.io/
+
+Simple usage:
+
+   mo [--false] [--help] [--source=FILE] filenames...
+
+--false       - Treat the string "false" as empty for conditionals.
+--help        - This message.
+--source=FILE - Load FILE into the environment before processing templates.

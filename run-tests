@@ -8,6 +8,7 @@ FAIL=0
 
 for TEST in tests/*.expected; do
     BASE="${TEST%.expected}"
+    MO_FALSE_IS_EMPTY=
 
     echo -n "$BASE ... "
 

@@ -8,6 +8,14 @@
 #/ conditionally display content or iterate over the values of an array.
 #/
 #/ Learn more about mustache templates at https://mustache.github.io/
+#/
+#/ Simple usage:
+#/
+#/    mo [--false] [--help] [--source=FILE] filenames...
+#/
+#/ --false       - Treat the string "false" as empty for conditionals.
+#/ --help        - This message.
+#/ --source=FILE - Load FILE into the environment before processing templates.
 #
 # Mo is under a MIT style licence with an additional non-advertising clause.
 # See LICENSE.md for the full text.
@@ -20,12 +28,23 @@
 # Public: Template parser function.  Writes templates to stdout.
 #
 # $0            - Name of the mo file, used for getting the help message.
+# --false       - Treat "false" as an empty value.  You may set the
+#                 MO_FALSE_IS_EMPTY environment variable instead to a non-empty
+#                 value to enable this behavior.
 # --help        - Display a help message.
 # --source=FILE - Source a file into the environment before processint
 #                 template files.
 # --            - Used to indicate the end of options.  You may optionally
 #                 use this when filenames may start with two hyphens.
 # $@            - Filenames to parse.
+#
+# Mo uses the following environment variables:
+#
+# MO_FALSE_IS_EMPTY   - When set to a non-empty value, the string "false"
+#                       will be treated as an empty value for the purposes
+#                       of conditionals.
+# MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate
+#                       a help message.
 #
 # Returns nothing.
 mo() (
@@ -45,9 +64,13 @@ mo() (
                 files=("${files[@]}" "$arg")
             else
                 case "$arg" in
-                    -h|--h|--he|--hel|--help)
+                    -h|--h|--he|--hel|--help|-\?)
                         moUsage "$0"
                         exit 0
+                        ;;
+
+                    --false)
+                        MO_FALSE_IS_EMPTY=true
                         ;;
 
                     --source=*)
@@ -775,15 +798,19 @@ moStandaloneDenied() {
 
 
 # Internal: Determines if the named thing is a function or if it is a
-# non-empty environment variable.
+# non-empty environment variable.  When MO_FALSE_IS_EMPTY is set to a
+# non-empty value, then "false" is also treated is an empty value.
 #
 # Do not use variables without prefixes here if possible as this needs to
 # check if any name exists in the environment
 #
-# $1 - Name of environment variable or function
-# $2 - Current value (our context)
+# $1                - Name of environment variable or function
+# $2                - Current value (our context)
+# MO_FALSE_IS_EMPTY - When set to a non-empty value, this will say the
+#                     string value "false" is empty.
 #
-# Returns 0 if the name is not empty, 1 otherwise.
+# Returns 0 if the name is not empty, 1 otherwise.  When MO_FALSE_IS_EMPTY
+# is set, this returns 1 if the name is "false".
 moTest() {
     # Test for functions
     moIsFunction "$1" && return 0
@@ -792,6 +819,10 @@ moTest() {
         # Arrays must have at least 1 element
         eval '[[ "${#'"$1"'[@]}" -gt 0 ]]' && return 0
     else
+        # If MO_FALSE_IS_EMPTY is set, then return 1 if the value of
+        # the variable is "false".
+        [[ ! -z "${MO_FALSE_IS_EMPTY-}" ]] && [[ "${!1-}" == "false" ]] && return 1
+
         # Environment variables must not be empty
         [[ ! -z "${!1}" ]] && return 0
     fi
@@ -855,9 +886,12 @@ moTrimWhitespace() {
 #
 # Returns nothing.
 moUsage() {
-    grep '^#/' "$1" | cut -c 4-
+    grep '^#/' "${MO_ORIGINAL_COMMAND}" | cut -c 4-
 }
 
+
+# Save the original command's path for usage later
+MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE%/*}"; pwd)/${BASH_SOURCE##*/}"
 
 # If sourced, load all functions.
 # If executed, perform the actions as expected.

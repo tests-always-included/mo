@@ -1,0 +1,4 @@
+The user {{USER}} exists.
+{{#ADMIN}}
+WRONG - should not be an admin.
+{{/ADMIN}}

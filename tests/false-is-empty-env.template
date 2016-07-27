@@ -1,0 +1,4 @@
+Works
+{{#someFalseValue}}
+  Never shown!
+{{/someFalseValue}}
