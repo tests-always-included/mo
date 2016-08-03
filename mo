@@ -70,6 +70,7 @@ mo() (
                         ;;
 
                     --false)
+                        # shellcheck disable=SC2030
                         MO_FALSE_IS_EMPTY=true
                         ;;
 
@@ -194,7 +195,7 @@ moFindString() {
 
     string=${2%%$3*}
     [[ "$string" == "$2" ]] && pos=-1 || pos=${#string}
-    local "$1" && moIndirect "$1" $pos
+    local "$1" && moIndirect "$1" "$pos"
 }
 
 
@@ -335,7 +336,7 @@ moIndirect() {
 # Returns nothing.
 moIndirectArray() {
     unset -v "$1"
-    eval $1=\(\"\${@:2}\"\)
+    eval "$1=(\"\${@:2}\")"
 }
 
 
@@ -479,7 +480,7 @@ moLoadFile() {
     # a dot to the content to preserve all newlines.
     # TODO: remove cat and replace with read loop?
 
-    content=$(cat -- $2; echo '.')
+    content=$(cat -- "$2"; echo '.')
     len=$((${#content} - 1))
     content=${content:0:$len}  # Remove last dot
 
@@ -535,7 +536,7 @@ moParse() {
             '#'*)
                 # Loop, if/then, or pass content through function
                 # Sets context
-                moStandaloneAllowed moContent "${moContent[@]}" $moIsBeginning
+                moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
                 moTrimWhitespace moTag "${moTag:1}"
                 moFindEndTag moBlock "$moContent" "$moTag"
                 moFullTagName moTag "$moCurrent" "$moTag"
@@ -549,7 +550,7 @@ moParse() {
                         moParse "$moContent" "$moCurrent" false
                         moContent="${moBlock[2]}"
                     elif moIsArray "$moTag"; then
-                        eval 'moLoop "${moBlock[0]}" "$moTag" "${!'"$moTag"'[@]}"'
+                        eval "moLoop \"\${moBlock[0]}\" \"$moTag\" \"\${!${moTag}[@]}\""
                     else
                         moParse "${moBlock[0]}" "$moCurrent" false
                     fi
@@ -560,18 +561,18 @@ moParse() {
 
             '>'*)
                 # Load partial - get name of file relative to cwd
-                moPartial moContent "${moContent[@]}" $moIsBeginning "$moCurrent"
+                moPartial moContent "${moContent[@]}" "$moIsBeginning" "$moCurrent"
                 ;;
 
             '/'*)
                 # Closing tag - If hit in this loop, we simply ignore
                 # Matching tags are found in moFindEndTag
-                moStandaloneAllowed moContent "${moContent[@]}" $moIsBeginning
+                moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
                 ;;
 
             '^'*)
                 # Display section if named thing does not exist
-                moStandaloneAllowed moContent "${moContent[@]}" $moIsBeginning
+                moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
                 moTrimWhitespace moTag "${moTag:1}"
                 moFindEndTag moBlock "$moContent" "$moTag"
                 moFullTagName moTag "$moCurrent" "$moTag"
@@ -586,7 +587,7 @@ moParse() {
             '!'*)
                 # Comment - ignore the tag content entirely
                 # Trim spaces/tabs before the comment
-                moStandaloneAllowed moContent "${moContent[@]}" $moIsBeginning
+                moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
                 ;;
 
             .)
@@ -599,7 +600,7 @@ moParse() {
                 # Change delimiters
                 # Any two non-whitespace sequences separated by whitespace.
                 # TODO
-                moStandaloneAllowed moContent "${moContent[@]}" $moIsBeginning
+                moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
                 ;;
 
             '{'*)
@@ -657,7 +658,7 @@ moPartial() {
     # Namespace variables here to prevent conflicts.
     local moContent moFilename moIndent moPartial moStandalone
 
-    if moIsStandalone moStandalone "$2" "$4" $5; then
+    if moIsStandalone moStandalone "$2" "$4" "$5"; then
         moStandalone=( $moStandalone )
         echo -n "${2:0:${moStandalone[0]}}"
         moIndent=${2:${moStandalone[0]}}
@@ -718,7 +719,7 @@ moShow() {
         fi
     else
         # Further subindexes are disallowed
-        eval 'echo -n "${'"${moNameParts[0]}"'['"${moNameParts[1]%%.*}"']}"'
+        eval "echo -n \"\${${moNameParts[0]}[${moNameParts[1]%%.*}]}\""
     fi
 }
 
@@ -771,7 +772,7 @@ moSplit() {
 moStandaloneAllowed() {
     local bytes
 
-    if moIsStandalone bytes "$2" "$4" $5; then
+    if moIsStandalone bytes "$2" "$4" "$5"; then
         bytes=( $bytes )
         echo -n "${2:0:${bytes[0]}}"
         local "$1" && moIndirect "$1" "${4:${bytes[1]}}"
@@ -817,10 +818,11 @@ moTest() {
 
     if moIsArray "$1"; then
         # Arrays must have at least 1 element
-        eval '[[ "${#'"$1"'[@]}" -gt 0 ]]' && return 0
+        eval "[[ \"\${#${1}[@]}\" -gt 0 ]]" && return 0
     else
         # If MO_FALSE_IS_EMPTY is set, then return 1 if the value of
         # the variable is "false".
+        # shellcheck disable=SC2031
         [[ ! -z "${MO_FALSE_IS_EMPTY-}" ]] && [[ "${!1-}" == "false" ]] && return 1
 
         # Environment variables must not be empty

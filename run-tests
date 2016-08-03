@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 
-cd "$(dirname $0)"
+cd "${0%/*}"
 
 . ./mo
 PASS=0
 FAIL=0
 
 for TEST in tests/*.expected; do
-    BASE="${TEST%.expected}"
-    MO_FALSE_IS_EMPTY=
+    export BASE="${TEST%.expected}"
+    export MO_FALSE_IS_EMPTY=
 
     echo -n "$BASE ... "
 
@@ -25,10 +25,10 @@ for TEST in tests/*.expected; do
 
     if [[ $? -ne 0 ]]; then
         echo "FAIL"
-        FAIL=$(( $FAIL + 1 ))
+        FAIL=$(( FAIL + 1 ))
     else
         echo "ok"
-        PASS=$(( $PASS + 1 ))
+        PASS=$(( PASS + 1 ))
         rm "${BASE}.diff"
     fi
 done
