@@ -94,6 +94,8 @@ First you need to get the official tests.  This command will pull them down and 
 
 After that you need to install node.js and run `npm install async` (no, I didn't make a package.json to just list one dependency).  Finally, `./run-spec.js spec/specs/*.json` will run against the official tests - there's over 100 of them.
 
+When submitting patches, make sure to run them past [ShellCheck] and ensure no problems are found.  Also please use Bash 3 syntax if you are manipulating arrays.
+
 
 ### Porting and Backporting
 
@@ -121,3 +123,4 @@ This program is licensed under an MIT license with an additional non-advertising
 
 
 [Mustache]: https://mustache.github.io/
+[ShellCheck]: https://github.com/koalaman/shellcheck
