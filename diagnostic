@@ -83,6 +83,7 @@ echo -n "moIsArray ... "
     moIsArray TEST || fail "Wrongly said array was not an array"
 )
 (
+    # shellcheck disable=SC2034
     TEST=""
     moIsArray TEST && fail "Wrongly said string was an array"
 )
@@ -158,6 +159,7 @@ echo -n "moStandaloneDenied ... "
 echo "ok"
 
 echo -n "moTest ... "
+# shellcheck disable=SC2034
 (
     aa() { echo "hi"; }
     bb="bb"
@@ -174,6 +176,7 @@ echo -n "moTest ... "
     moTest xx && fail "Erroneously flagged an empty array"
     moTest yy && fail "Erroneously flagged an undefined value"
     moTest zz && fail "Erroneously flagged an empty string"
+    MO_FALSE_IF_EMPTY=true moTest zz && fail "Erroneously flagged an empty value as non-false when empty should be false"
 )
 echo "ok"
 
@@ -212,6 +215,7 @@ echo -n "moIndentLines ... "
 (
     CR=$'\r'
     LF=$'\n'
+    # shellcheck disable=SC2034
     CRLF="$CR$LF"
 
     # CAUTION
@@ -371,6 +375,7 @@ echo -n "moPartial ... "
 echo "ok"
 
 echo -n "moShow ... "
+# shellcheck disable=SC2034
 (
     aa() { echo "this is aa"; }
     bb="BB"
