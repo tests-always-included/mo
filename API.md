@@ -4,19 +4,52 @@ API / Function Documentation
 This documentation is generated automatically from the source of [mo] thanks to [tomdoc.sh].
 
 
-`mo()`
-------
+mo()
+----
 
 Public: Template parser function.  Writes templates to stdout.
 
-* $0 - Name of the mo file, used for getting the help message.
-* $* - Filenames to parse.  Can use -h or --help as the only option in order to show a help message.
+* $0            - Name of the mo file, used for getting the help message.
+* --false       - Treat "false" as an empty value.  You may set the MO_FALSE_IS_EMPTY environment variable instead to a non-empty value to enable this behavior.
+* --help        - Display a help message.
+* --source=FILE - Source a file into the environment before processint template files.
+* --            - Used to indicate the end of options.  You may optionally use this when filenames may start with two hyphens.
+* $@            - Filenames to parse.
+
+Mo uses the following environment variables:
+
+* MO_FALSE_IS_EMPTY   - When set to a non-empty value, the string "false" will be treated as an empty value for the purposes of conditionals.
+* MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate a help message.
 
 Returns nothing.
 
 
-`moFindEndTag()`
-----------------
+files
+-----
+
+After we encounter two hyphens together, all the rest of the arguments are files.
+
+
+MO_FALSE_IS_EMPTY
+-----------------
+
+shellcheck disable=SC2030
+
+
+doubleHyphens
+-------------
+
+Set a flag indicating we've encountered double hyphens
+
+
+files
+-----
+
+Every arg that is not a flag or a option should be a file
+
+
+moFindEndTag()
+--------------
 
 Internal: Scan content until the right end tag is found.  Creates an array with the following members:
 
@@ -34,8 +67,8 @@ Everything using this function uses the "standalone tags" logic.
 Returns nothing.
 
 
-`moFindString()`
-----------------
+moFindString()
+--------------
 
 Internal: Find the first index of a substring.  If not found, sets the index to -1.
 
@@ -46,8 +79,8 @@ Internal: Find the first index of a substring.  If not found, sets the index to 
 Returns nothing.
 
 
-`moFullTagName()`
------------------
+moFullTagName()
+---------------
 
 Internal: Generate a dotted name based on current context and target name.
 
@@ -58,8 +91,8 @@ Internal: Generate a dotted name based on current context and target name.
 Returns nothing.
 
 
-`moGetContent()`
-----------------
+moGetContent()
+--------------
 
 Internal: Fetches the content to parse into a variable.  Can be a list of partials for files or the content from stdin.
 
@@ -69,8 +102,8 @@ Internal: Fetches the content to parse into a variable.  Can be a list of partia
 Returns nothing.
 
 
-`moIndentLines()`
------------------
+moIndentLines()
+---------------
 
 Internal: Indent a string, placing the indent at the beginning of every line that has any content.
 
@@ -81,8 +114,8 @@ Internal: Indent a string, placing the indent at the beginning of every line tha
 Returns nothing.
 
 
-`moIndirect()`
---------------
+moIndirect()
+------------
 
 Internal: Send a variable up to the parent of the caller of this function.
 
@@ -100,8 +133,8 @@ Examples
 Returns nothing.
 
 
-`moIndirectArray()`
--------------------
+moIndirectArray()
+-----------------
 
 Internal: Send an array as a variable up to caller of a function
 
@@ -120,8 +153,8 @@ Examples
 Returns nothing.
 
 
-`moIsArray()`
--------------
+moIsArray()
+-----------
 
 Internal: Determine if a given environment variable exists and if it is an array.
 
@@ -138,8 +171,8 @@ Examples
 Returns 0 if the name is not empty, 1 otherwise.
 
 
-`moIsFunction()`
-----------------
+moIsFunction()
+--------------
 
 Internal: Determine if the given name is a defined function.
 
@@ -157,8 +190,8 @@ Examples
 Returns 0 if the name is a function, 1 otherwise.
 
 
-`moIsStandalone()`
-------------------
+moIsStandalone()
+----------------
 
 Internal: Determine if the tag is a standalone tag based on whitespace before and after the tag.
 
@@ -178,8 +211,8 @@ Examples
 Returns nothing.
 
 
-`moJoin()`
-----------
+moJoin()
+--------
 
 Internal: Join / implode an array
 
@@ -190,8 +223,8 @@ Internal: Join / implode an array
 Returns nothing.
 
 
-`moLoadFile()`
---------------
+moLoadFile()
+------------
 
 Internal: Read a file into a variable.
 
@@ -201,8 +234,8 @@ Internal: Read a file into a variable.
 Returns nothing.
 
 
-`moLoop()`
-----------
+moLoop()
+--------
 
 Internal: Process a chunk of content some number of times.  Writes output to stdout.
 
@@ -213,8 +246,8 @@ Internal: Process a chunk of content some number of times.  Writes output to std
 Returns nothing.
 
 
-`moParse()`
------------
+moParse()
+---------
 
 Internal: Parse a block of text, writing the result to stdout.
 
@@ -225,8 +258,8 @@ Internal: Parse a block of text, writing the result to stdout.
 Returns nothing.
 
 
-`moPartial()`
--------------
+moPartial()
+-----------
 
 Internal: Process a partial.
 
@@ -244,8 +277,8 @@ Prefix all variables.
 Returns nothing.
 
 
-`moShow()`
-----------
+moShow()
+--------
 
 Internal: Show an environment variable or the output of a function to stdout.
 
@@ -257,8 +290,8 @@ Limit/prefix any variables used.
 Returns nothing.
 
 
-`moSplit()`
------------
+moSplit()
+---------
 
 Internal: Split a larger string into an array.
 
@@ -270,8 +303,8 @@ Internal: Split a larger string into an array.
 Returns nothing.
 
 
-`moStandaloneAllowed()`
------------------------
+moStandaloneAllowed()
+---------------------
 
 Internal: Handle the content for a standalone tag.  This means removing whitespace (not newlines) before a tag and whitespace and a newline after a tag.  That is, assuming, that the line is otherwise empty.
 
@@ -284,8 +317,8 @@ Internal: Handle the content for a standalone tag.  This means removing whitespa
 Returns nothing.
 
 
-`moStandaloneDenied()`
-----------------------
+moStandaloneDenied()
+--------------------
 
 Internal: Handle the content for a tag that is never "standalone".  No adjustments are made for newlines and whitespace.
 
@@ -297,21 +330,22 @@ Internal: Handle the content for a tag that is never "standalone".  No adjustmen
 Returns nothing.
 
 
-`moTest()`
-----------
+moTest()
+--------
 
-Internal: Determines if the named thing is a function or if it is a non-empty environment variable.
+Internal: Determines if the named thing is a function or if it is a non-empty environment variable.  When MO_FALSE_IS_EMPTY is set to a non-empty value, then "false" is also treated is an empty value.
 
 Do not use variables without prefixes here if possible as this needs to check if any name exists in the environment
 
-* $1 - Name of environment variable or function
-* $2 - Current value (our context)
+* $1                - Name of environment variable or function
+* $2                - Current value (our context)
+* MO_FALSE_IS_EMPTY - When set to a non-empty value, this will say the string value "false" is empty.
 
-Returns 0 if the name is not empty, 1 otherwise.
+Returns 0 if the name is not empty, 1 otherwise.  When MO_FALSE_IS_EMPTY is set, this returns 1 if the name is "false".
 
 
-`moTrimChars()`
----------------
+moTrimChars()
+-------------
 
 Internal: Trim the leading whitespace only.
 
@@ -324,8 +358,8 @@ Internal: Trim the leading whitespace only.
 Returns nothing.
 
 
-`moTrimWhitespace()`
---------------------
+moTrimWhitespace()
+------------------
 
 Internal: Trim leading and trailing whitespace from a string.
 
@@ -335,14 +369,20 @@ Internal: Trim leading and trailing whitespace from a string.
 Returns nothing.
 
 
-`moUsage()`
------------
+moUsage()
+---------
 
 Internal: Displays the usage for mo.  Pulls this from the file that contained the `mo` function.  Can only work when the right filename comes is the one argument, and that only happens when `mo` is called with `$0` set to this file.
 
 * $1 - Filename that has the help message
 
 Returns nothing.
+
+
+MO_ORIGINAL_COMMAND
+-------------------
+
+Save the original command's path for usage later
 
 
 [mo]: ./mo
