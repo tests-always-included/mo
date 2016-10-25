@@ -898,6 +898,6 @@ MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE%/*}" || exit 1; pwd)/${BASH_SOURCE##*/}
 
 # If sourced, load all functions.
 # If executed, perform the actions as expected.
-if [[ "$0" == "${BASH_SOURCE[0]}" ]] || ! [[ -n "${BASH_SOURCE[0]}" ]]; then
+if [[ "$0" == "${BASH_SOURCE[0]}" ]] || [[ -z "${BASH_SOURCE[0]}" ]]; then
     mo "$@"
 fi
