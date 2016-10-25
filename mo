@@ -78,6 +78,7 @@ mo() (
                         f2source="${1#--source=}"
 
                         if [[ -f "$f2source" ]]; then
+                            # shellcheck disable=SC1090
                             . "$f2source"
                         else
                             echo "No such file: $f2source" >&2
@@ -120,7 +121,7 @@ mo() (
 #
 # Returns nothing.
 moFindEndTag() {
-    local content scanned standaloneBytes tag
+    local content remaining scanned standaloneBytes tag
 
     #: Find open tags
     scanned=""
@@ -139,7 +140,7 @@ moFindEndTag() {
                 moTrimWhitespace tag "${tag:1}"
                 moFindEndTag content "${content[2]}" "$tag" "loop"
                 scanned="${scanned}${content[0]}${content[1]}"
-                content=${content[2]}
+                remaining=${content[2]}
                 ;;
 
             '/'*)
@@ -163,17 +164,17 @@ moFindEndTag() {
                 fi
 
                 scanned="$scanned${content[1]}"
-                content=${content[2]}
+                remaining=${content[2]}
                 ;;
 
             *)
                 #: Ignore all other tags
                 scanned="${scanned}${content[0]}${content[1]}"
-                content=${content[2]}
+                remaining=${content[2]}
                 ;;
         esac
 
-        moSplit content "$content" '{{' '}}'
+        moSplit content "$remaining" '{{' '}}'
     done
 
     #: Did not find our closing tag
@@ -674,7 +675,7 @@ moPartial() {
     # Execute in subshell to preserve current cwd and environment
     (
         # TODO:  Remove dirname and use a function instead
-        cd "$(dirname -- "$moFilename")"
+        cd "$(dirname -- "$moFilename")" || exit 1
         moIndentLines moPartial "$moIndent" "$(
             moLoadFile moPartial "${moFilename##*/}"
 
@@ -893,10 +894,10 @@ moUsage() {
 
 
 # Save the original command's path for usage later
-MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE%/*}"; pwd)/${BASH_SOURCE##*/}"
+MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE%/*}" || exit 1; pwd)/${BASH_SOURCE##*/}"
 
 # If sourced, load all functions.
 # If executed, perform the actions as expected.
-if [[ "$0" == "$BASH_SOURCE" ]] || ! [[ -n "$BASH_SOURCE" ]]; then
+if [[ "$0" == "${BASH_SOURCE[0]}" ]] || ! [[ -n "${BASH_SOURCE[0]}" ]]; then
     mo "$@"
 fi
