@@ -30,6 +30,62 @@ Requirements
 If you intend to develop this and run the official specs, you also need node.js.
 
 
+Installation
+------------
+
+There are a few ways you can install this tool.  How you install it depends on how you want to use it.
+
+
+### Globally; For Everyone
+
+You can install this file in `/usr/local/bin/` or `/usr/bin/` by simply downloading it, changing the permissions, then moving it to the right location.  Double check that your system's PATH includes the destination folder, otherwise users may have a hard time starting the command.
+
+    # Download
+    curl -sSO https://raw.githubusercontent.com/tests-always-included/mo/master/mo
+
+    # Make executable
+    chmod +x mo
+
+    # Move to the right folder
+    sudo mv mo /usr/local/bin/
+
+    # Test
+    echo "works" | mo
+
+
+### Locally; For Yourself
+
+This is very similar to installing it globally but it does not require root privileges.  It is very important that your PATH includes the destination folder otherwise it won't work.  Some local folders that are typically used are `~/bin/` and `~/.local/bin/`.
+
+    # Download
+    curl -sSO https://raw.githubusercontent.com/tests-always-included/mo/master/mo
+
+    # Make executable
+    chmod +x mo
+
+    # Ensure destination folder exists
+    mkdir -p ~/.local/bin/
+
+    # Move to the right folder
+    mv mo ~/.local/bin/
+
+    # Test
+    echo "works" | mo
+
+
+### As A Library; For A Tool
+
+Bash scripts can source `mo` to include the functionality in their own routines.  This usage typically would have `mo` saved to a `lib/` folder in an application and your other scripts would use `. lib/mo` to bring it into your project.
+
+    # Download
+    curl -sSO https://raw.githubusercontent.com/tests-always-included/mo/master/mo
+
+    # Move into your project folder
+    mv mo ~/projects/amazing-things/lib/
+
+To allow it to work this way, you either should source the file (`. "lib/mo"`) or make it executable (`chmod +x lib/mo`) and run it from your scripts.
+
+
 How to Use
 ----------
 
