@@ -150,7 +150,7 @@ moFindEndTag() {
 
                 if [[ "$tag" == "$3" ]]; then
                     #: Found our end tag
-                    if [[ -z "$4" ]] && moIsStandalone standaloneBytes "$scanned" "${content[2]}" true; then
+                    if [[ -z "${4-}" ]] && moIsStandalone standaloneBytes "$scanned" "${content[2]}" true; then
                         #: This is also a standalone tag - clean up whitespace
                         #: and move those whitespace bytes to the "tag" element
                         standaloneBytes=( $standaloneBytes )
@@ -208,7 +208,7 @@ moFindString() {
 #
 # Returns nothing.
 moFullTagName() {
-    if [[ -z "$2" ]] || [[ "$2" == *.* ]]; then
+    if [[ -z "${2-}" ]] || [[ "$2" == *.* ]]; then
         local "$1" && moIndirect "$1" "$3"
     else
         local "$1" && moIndirect "$1" "${2}.${3}"
@@ -260,8 +260,9 @@ moIndentLines() {
     #: This removes newline and dot from the workaround in moPartial
     content="${3:0:$len}"
 
-    if [ -z "$2" ]; then
+    if [[ -z "${2-}" ]]; then
         local "$1" && moIndirect "$1" "$content"
+
         return 0
     fi
 
@@ -279,7 +280,7 @@ moIndentLines() {
 
         moTrimChars trimmed "$fragment" false true " " $'\t' $'\n' $'\r'
 
-        if [ ! -z "$trimmed" ]; then
+        if [[ -n "$trimmed" ]]; then
             fragment="$2$fragment"
         fi
 
@@ -290,7 +291,7 @@ moIndentLines() {
 
     moTrimChars trimmed "$content" false true " " $'\t'
 
-    if [ ! -z "$trimmed" ]; then
+    if [[ -n "$trimmed" ]]; then
         content="$2$content"
     fi
 
@@ -346,6 +347,10 @@ moIndirectArray() {
 #
 # $1 - Name of environment variable
 #
+# Be extremely careful.  Even if strict mode is enabled, it is not honored
+# in newer versions of Bash.  Any errors that crop up here will not be
+# caught automatically.
+#
 # Examples
 #
 #   var=(abc)
@@ -370,6 +375,10 @@ moIsArray() {
 # Internal: Determine if the given name is a defined function.
 #
 # $1 - Function name to check
+#
+# Be extremely careful.  Even if strict mode is enabled, it is not honored
+# in newer versions of Bash.  Any errors that crop up here will not be
+# caught automatically.
 #
 # Examples
 #
@@ -426,14 +435,14 @@ moIsStandalone() {
     char=${beforeTrimmed:$char}
 
     if [[ "$char" != $'\n' ]] && [[ "$char" != $'\r' ]]; then
-        if [[ ! -z "$char" ]] || ! $4; then
+        if [[ -n "$char" ]] || ! $4; then
             return 1
         fi
     fi
 
     char=${afterTrimmed:0:1}
 
-    if [[ "$char" != $'\n' ]] && [[ "$char" != $'\r' ]] && [[ ! -z "$char" ]]; then
+    if [[ "$char" != $'\n' ]] && [[ "$char" != $'\r' ]] && [[ -n "$char" ]]; then
         return 2
     fi
 
@@ -744,7 +753,7 @@ moSplit() {
         result[1]=${result[0]:$pos + ${#3}}
         result[0]=${result[0]:0:$pos}
 
-        if [[ ! -z "$4" ]]; then
+        if [[ -n "${4-}" ]]; then
             moFindString pos "${result[1]}" "$4"
 
             if [[ "$pos" -ne -1 ]]; then
@@ -824,10 +833,10 @@ moTest() {
         # If MO_FALSE_IS_EMPTY is set, then return 1 if the value of
         # the variable is "false".
         # shellcheck disable=SC2031
-        [[ ! -z "${MO_FALSE_IS_EMPTY-}" ]] && [[ "${!1-}" == "false" ]] && return 1
+        [[ -n "${MO_FALSE_IS_EMPTY-}" ]] && [[ "${!1-}" == "false" ]] && return 1
 
         # Environment variables must not be empty
-        [[ ! -z "${!1}" ]] && return 0
+        [[ -n "${!1}" ]] && return 0
     fi
 
     return 1
