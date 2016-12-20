@@ -75,7 +75,7 @@ mo() (
                         ;;
 
                     --source=*)
-                        f2source="${1#--source=}"
+                        f2source="${arg#--source=}"
 
                         if [[ -f "$f2source" ]]; then
                             # shellcheck disable=SC1090
