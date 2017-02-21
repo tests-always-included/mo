@@ -338,7 +338,12 @@ moIndirect() {
 # Returns nothing.
 moIndirectArray() {
     unset -v "$1"
-    eval "$1=(\"\${@:2}\")"
+
+    # IFS must be set to a string containing space or unset in order for
+    # the array slicing to work regardless of the current IFS setting on
+    # bash 3.  This is detailed further at
+    # https://github.com/fidian/gg-core/pull/7
+    IFS= eval "$1=(\"\${@:2}\")"
 }
 
 
