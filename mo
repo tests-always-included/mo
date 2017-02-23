@@ -343,7 +343,7 @@ moIndirectArray() {
     # the array slicing to work regardless of the current IFS setting on
     # bash 3.  This is detailed further at
     # https://github.com/fidian/gg-core/pull/7
-    IFS= eval "$1=(\"\${@:2}\")"
+    eval "$(printf "IFS= %s=(\"\${@:2}\") IFS=%q" "$1" "$IFS")"
 }
 
 
