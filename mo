@@ -93,7 +93,7 @@ mo() (
 
                     *)
                         # Every arg that is not a flag or a option should be a file
-                        files=("${files[@]}" "$arg")
+                        files=(${files[@]+"${files[@]}"} "$arg")
                         ;;
                 esac
             fi
@@ -257,8 +257,8 @@ moIndentLines() {
     result=""
     
     #: Remove the period from the end of the string.
-    len=$((${#content} - 1))
-    content=${3:0:len}
+    len=$((${#3} - 1))
+    content=${3:0:$len}
 
     if [[ -z "${2-}" ]]; then
         local "$1" && moIndirect "$1" "$content"
@@ -857,7 +857,7 @@ moTest() {
         [[ -n "${MO_FALSE_IS_EMPTY-}" ]] && [[ "${!1-}" == "false" ]] && return 1
 
         # Environment variables must not be empty
-        [[ -n "${!1}" ]] && return 0
+        [[ -n "${!1-}" ]] && return 0
     fi
 
     return 1
