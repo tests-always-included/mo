@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+export data=$'line 1\nline 2'
+
+cat <<EOF | ../mo
+Here is a partial without an indent:
+
+{{> partial}}
+
+And here's the same partial with a 4-space indent:
+
+    {{> partial}}
+
+:-)
+EOF
