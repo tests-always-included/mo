@@ -255,10 +255,10 @@ moIndentLines() {
     local content fragment len posN posR result trimmed
 
     result=""
-    len=$((${#3} - 1))
-
-    #: This removes newline and dot from the workaround in moPartial
-    content="${3:0:$len}"
+    
+    #: Remove the period from the end of the string.
+    len=$((${#content} - 1))
+    content=${3:0:len}
 
     if [[ -z "${2-}" ]]; then
         local "$1" && moIndirect "$1" "$content"
@@ -285,8 +285,23 @@ moIndentLines() {
         fi
 
         result="$result$fragment"
+
         moFindString posN "$content" $'\n'
         moFindString posR "$content" $'\r'
+
+        # If the content ends in a newline, do not indent.
+        if [[ "$posN" -eq ${#content} ]]; then
+            # Special clause for \r\n
+            if [[ "$posR" -eq "$((posN - 1))" ]]; then
+                posR=-1
+            fi
+
+            posN=-1
+        fi
+
+        if [[ "$posR" -eq ${#content} ]]; then
+            posR=-1
+        fi
     done
 
     moTrimChars trimmed "$content" false true " " $'\t'
@@ -692,12 +707,13 @@ moPartial() {
         cd "$(dirname -- "$moFilename")" || exit 1
         moIndentLines moPartial "$moIndent" "$(
             moLoadFile moPartial "${moFilename##*/}"
+            moParse "${moPartial}" "$6" true
 
-            # Fix bash handling of subshells
-            # The extra dot is removed in moIndentLines
-            echo -n "${moPartial}."
+            # Fix bash handling of subshells and keep trailing whitespace.
+            # This is removed in moIndentLines.
+            echo -n "."
         )"
-        moParse "$moPartial" "$6" true
+        echo -n "$moPartial"
     )
 
     local "$1" && moIndirect "$1" "$moContent"
