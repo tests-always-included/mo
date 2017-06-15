@@ -696,7 +696,7 @@ moParse() {
 # Returns nothing.
 moPartial() {
     # Namespace variables here to prevent conflicts.
-    local moContent moFilename moIndent moPartial moStandalone
+    local moContent moFilename moIndent moPartial moStandalone moUnindented
 
     if moIsStandalone moStandalone "$2" "$4" "$5"; then
         moStandalone=( $moStandalone )
@@ -715,16 +715,17 @@ moPartial() {
     (
         # TODO:  Remove dirname and use a function instead
         cd "$(dirname -- "$moFilename")" || exit 1
-        moIndentLines moPartial "$moIndent" "$(
+        moUnindented="$(
             moLoadFile moPartial "${moFilename##*/}"
             moParse "${moPartial}" "$6" true
 
             # Fix bash handling of subshells and keep trailing whitespace.
             # This is removed in moIndentLines.
             echo -n "."
-        )"
+        )" || exit 1
+        moIndentLines moPartial "$moIndent" "$moUnindented"
         echo -n "$moPartial"
-    )
+    ) || exit 1
 
     local "$1" && moIndirect "$1" "$moContent"
 }
