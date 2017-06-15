@@ -11,6 +11,7 @@ Simple usage:
 
    mo [--false] [--help] [--source=FILE] filenames...
 
---false       - Treat the string "false" as empty for conditionals.
---help        - This message.
---source=FILE - Load FILE into the environment before processing templates.
+--fail-not-set - Fail upon expansion of an unset variable.
+--false        - Treat the string "false" as empty for conditionals.
+--help         - This message.
+--source=FILE  - Load FILE into the environment before processing templates.
