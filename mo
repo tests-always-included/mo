@@ -758,7 +758,7 @@ moShow() {
             echo -n "$moJoined"
         else
             # shellcheck disable=SC2031
-            if [[ -z "$MO_FAIL_ON_UNSET" ]] || moTest "$1"; then
+            if [[ -z "$MO_FAIL_ON_UNSET" ]] || moTestVarSet "$1"; then
                 echo -n "${!1}"
             else
                 echo "Env variable not set: $1" >&2
@@ -878,6 +878,16 @@ moTest() {
     fi
 
     return 1
+}
+
+# Internal: Determine if a variable is assigned, even if it is assigned an empty
+# value.
+#
+# $1 - Variable name to check.
+#
+# Returns true (0) if the variable is set, 1 if the variable is unset.
+moTestVarSet() {
+    [[ "${!1-a}" == "${!1-b}" ]]
 }
 
 

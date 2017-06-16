@@ -1,1 +1,3 @@
-* {{__NO_SUCH_VAR}}
+Populated: {{POPULATED}};
+Empty: {{EMPTY}};
+Unset: {{__NO_SUCH_VAR}};

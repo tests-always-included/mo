@@ -2,7 +2,11 @@
 
 cd "${0%/*}"
 unset __NO_SUCH_VAR
-echo "This will fail: {{__NO_SUCH_VAR}}" | ../mo --fail-not-set 2>&1
+POPULATED="words" EMPTY="" ../mo --fail-not-set 2>&1 <<EOF
+Populated: {{POPULATED}};
+Empty: {{EMPTY}};
+Unset: {{__NO_SUCH_VAR}};
+EOF
 
 if [[ $? -ne 1 ]]; then
     echo "Did not return 1"
