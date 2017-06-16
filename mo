@@ -13,9 +13,10 @@
 #/
 #/    mo [--false] [--help] [--source=FILE] filenames...
 #/
-#/ --false       - Treat the string "false" as empty for conditionals.
-#/ --help        - This message.
-#/ --source=FILE - Load FILE into the environment before processing templates.
+#/ --fail-not-set - Fail upon expansion of an unset variable.
+#/ --false        - Treat the string "false" as empty for conditionals.
+#/ --help         - This message.
+#/ --source=FILE  - Load FILE into the environment before processing templates.
 #
 # Mo is under a MIT style licence with an additional non-advertising clause.
 # See LICENSE.md for the full text.
@@ -27,19 +28,23 @@
 
 # Public: Template parser function.  Writes templates to stdout.
 #
-# $0            - Name of the mo file, used for getting the help message.
-# --false       - Treat "false" as an empty value.  You may set the
-#                 MO_FALSE_IS_EMPTY environment variable instead to a non-empty
-#                 value to enable this behavior.
-# --help        - Display a help message.
-# --source=FILE - Source a file into the environment before processint
-#                 template files.
-# --            - Used to indicate the end of options.  You may optionally
-#                 use this when filenames may start with two hyphens.
-# $@            - Filenames to parse.
+# $0             - Name of the mo file, used for getting the help message.
+# --fail-not-set - Fail upon expansion of an unset variable.  Default behavior
+#                  is to silently ignore and expand into empty string.
+# --false        - Treat "false" as an empty value.  You may set the
+#                  MO_FALSE_IS_EMPTY environment variable instead to a non-empty
+#                  value to enable this behavior.
+# --help         - Display a help message.
+# --source=FILE  - Source a file into the environment before processint
+#                  template files.
+# --             - Used to indicate the end of options.  You may optionally
+#                  use this when filenames may start with two hyphens.
+# $@             - Filenames to parse.
 #
 # Mo uses the following environment variables:
 #
+# MO_FAIL_ON_UNSET    - When set to a non-empty value, expansion of an unset
+#                       env variable will be aborted with an error.
 # MO_FALSE_IS_EMPTY   - When set to a non-empty value, the string "false"
 #                       will be treated as an empty value for the purposes
 #                       of conditionals.
@@ -67,6 +72,11 @@ mo() (
                     -h|--h|--he|--hel|--help|-\?)
                         moUsage "$0"
                         exit 0
+                        ;;
+
+                    --fail-not-set)
+                        # shellcheck disable=SC2030
+                        MO_FAIL_ON_UNSET=true
                         ;;
 
                     --false)
@@ -255,7 +265,7 @@ moIndentLines() {
     local content fragment len posN posR result trimmed
 
     result=""
-    
+
     #: Remove the period from the end of the string.
     len=$((${#3} - 1))
     content=${3:0:$len}
@@ -686,7 +696,7 @@ moParse() {
 # Returns nothing.
 moPartial() {
     # Namespace variables here to prevent conflicts.
-    local moContent moFilename moIndent moPartial moStandalone
+    local moContent moFilename moIndent moPartial moStandalone moUnindented
 
     if moIsStandalone moStandalone "$2" "$4" "$5"; then
         moStandalone=( $moStandalone )
@@ -705,16 +715,17 @@ moPartial() {
     (
         # TODO:  Remove dirname and use a function instead
         cd "$(dirname -- "$moFilename")" || exit 1
-        moIndentLines moPartial "$moIndent" "$(
+        moUnindented="$(
             moLoadFile moPartial "${moFilename##*/}"
             moParse "${moPartial}" "$6" true
 
             # Fix bash handling of subshells and keep trailing whitespace.
             # This is removed in moIndentLines.
             echo -n "."
-        )"
+        )" || exit 1
+        moIndentLines moPartial "$moIndent" "$moUnindented"
         echo -n "$moPartial"
-    )
+    ) || exit 1
 
     local "$1" && moIndirect "$1" "$moContent"
 }
@@ -746,7 +757,13 @@ moShow() {
             eval moJoin moJoined "," "\${$1[@]}"
             echo -n "$moJoined"
         else
-            echo -n "${!1}"
+            # shellcheck disable=SC2031
+            if [[ -z "$MO_FAIL_ON_UNSET" ]] || moTestVarSet "$1"; then
+                echo -n "${!1}"
+            else
+                echo "Env variable not set: $1" >&2
+                exit 1
+            fi
         fi
     else
         # Further subindexes are disallowed
@@ -861,6 +878,16 @@ moTest() {
     fi
 
     return 1
+}
+
+# Internal: Determine if a variable is assigned, even if it is assigned an empty
+# value.
+#
+# $1 - Variable name to check.
+#
+# Returns true (0) if the variable is set, 1 if the variable is unset.
+moTestVarSet() {
+    [[ "${!1-a}" == "${!1-b}" ]]
 }
 
 
