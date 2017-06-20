@@ -9,15 +9,17 @@ mo()
 
 Public: Template parser function.  Writes templates to stdout.
 
-* $0            - Name of the mo file, used for getting the help message.
-* --false       - Treat "false" as an empty value.  You may set the MO_FALSE_IS_EMPTY environment variable instead to a non-empty value to enable this behavior.
-* --help        - Display a help message.
-* --source=FILE - Source a file into the environment before processint template files.
-* --            - Used to indicate the end of options.  You may optionally use this when filenames may start with two hyphens.
-* $@            - Filenames to parse.
+* $0             - Name of the mo file, used for getting the help message.
+* --fail-not-set - Fail upon expansion of an unset variable.  Default behavior is to silently ignore and expand into empty string.
+* --false        - Treat "false" as an empty value.  You may set the MO_FALSE_IS_EMPTY environment variable instead to a non-empty value to enable this behavior.
+* --help         - Display a help message.
+* --source=FILE  - Source a file into the environment before processint template files.
+* --             - Used to indicate the end of options.  You may optionally use this when filenames may start with two hyphens.
+* $@             - Filenames to parse.
 
 Mo uses the following environment variables:
 
+* MO_FAIL_ON_UNSET    - When set to a non-empty value, expansion of an unset env variable will be aborted with an error.
 * MO_FALSE_IS_EMPTY   - When set to a non-empty value, the string "false" will be treated as an empty value for the purposes of conditionals.
 * MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate a help message.
 
@@ -28,6 +30,12 @@ files
 -----
 
 After we encounter two hyphens together, all the rest of the arguments are files.
+
+
+MO_FAIL_ON_UNSET
+----------------
+
+shellcheck disable=SC2030
 
 
 MO_FALSE_IS_EMPTY
@@ -160,6 +168,8 @@ Internal: Determine if a given environment variable exists and if it is an array
 
 * $1 - Name of environment variable
 
+Be extremely careful.  Even if strict mode is enabled, it is not honored in newer versions of Bash.  Any errors that crop up here will not be caught automatically.
+
 Examples
 
     var=(abc)
@@ -177,6 +187,8 @@ moIsFunction()
 Internal: Determine if the given name is a defined function.
 
 * $1 - Function name to check
+
+Be extremely careful.  Even if strict mode is enabled, it is not honored in newer versions of Bash.  Any errors that crop up here will not be caught automatically.
 
 Examples
 
@@ -263,11 +275,13 @@ moPartial()
 
 Internal: Process a partial.
 
-Indentation should be applied to the entire partial
+Indentation should be applied to the entire partial.
+
+This sends back the "is beginning" flag because the newline after a standalone partial is consumed. That newline is very important in the middle of content. We send back this flag to reset the processing loop's `moIsBeginning` variable, so the software thinks we are back at the beginning of a file and standalone processing continues to work.
 
 Prefix all variables.
 
-* $1 - Name of destination "content" variable.
+* $1 - Name of destination variable. Element [0] is the content, [1] is the true/false flag indicating if we are at the beginning of content.
 * $2 - Content before the tag that was not yet written
 * $3 - Tag content
 * $4 - Content after the tag
@@ -342,6 +356,16 @@ Do not use variables without prefixes here if possible as this needs to check if
 * MO_FALSE_IS_EMPTY - When set to a non-empty value, this will say the string value "false" is empty.
 
 Returns 0 if the name is not empty, 1 otherwise.  When MO_FALSE_IS_EMPTY is set, this returns 1 if the name is "false".
+
+
+moTestVarSet()
+--------------
+
+Internal: Determine if a variable is assigned, even if it is assigned an empty value.
+
+* $1 - Variable name to check.
+
+Returns true (0) if the variable is set, 1 if the variable is unset.
 
 
 moTrimChars()

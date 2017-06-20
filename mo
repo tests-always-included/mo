@@ -464,15 +464,20 @@ moIsStandalone() {
     char=$((${#beforeTrimmed} - 1))
     char=${beforeTrimmed:$char}
 
+    # If the content before didn't end in a newline
     if [[ "$char" != $'\n' ]] && [[ "$char" != $'\r' ]]; then
+        # and there was content or this didn't start the file
         if [[ -n "$char" ]] || ! $4; then
+            # then this is not a standalone tag.
             return 1
         fi
     fi
 
     char=${afterTrimmed:0:1}
 
+    # If the content after doesn't start with a newline and it is something
     if [[ "$char" != $'\n' ]] && [[ "$char" != $'\r' ]] && [[ -n "$char" ]]; then
+        # then this is not a standalone tag.
         return 2
     fi
 
@@ -518,7 +523,8 @@ moLoadFile() {
 
     # The subshell removes any trailing newlines.  We forcibly add
     # a dot to the content to preserve all newlines.
-    # TODO: remove cat and replace with read loop?
+    # As a future optimization, it would be worth considering removing
+    # cat and replacing this with a read loop.
 
     content=$(cat -- "$2"; echo '.')
     len=$((${#content} - 1))
@@ -561,7 +567,7 @@ moLoop() {
 moParse() {
     # Keep naming variables mo* here to not overwrite needed variables
     # used in the string replacements
-    local moBlock moContent moCurrent moIsBeginning moTag
+    local moBlock moContent moCurrent moIsBeginning moNextIsBeginning moTag
 
     moCurrent=$2
     moIsBeginning=$3
@@ -571,6 +577,7 @@ moParse() {
 
     while [[ "${#moContent[@]}" -gt 1 ]]; do
         moTrimWhitespace moTag "${moContent[1]}"
+        moNextIsBeginning=false
 
         case $moTag in
             '#'*)
@@ -584,7 +591,7 @@ moParse() {
                 if moTest "$moTag"; then
                     # Show / loop / pass through function
                     if moIsFunction "$moTag"; then
-                        #: TODO: Consider piping the output to moGetContent
+                        #: Consider piping the output to moGetContent
                         #: so the lambda does not execute in a subshell?
                         moContent=$($moTag "${moBlock[0]}")
                         moParse "$moContent" "$moCurrent" false
@@ -602,6 +609,8 @@ moParse() {
             '>'*)
                 # Load partial - get name of file relative to cwd
                 moPartial moContent "${moContent[@]}" "$moIsBeginning" "$moCurrent"
+                moNextIsBeginning=${moContent[1]}
+                moContent=${moContent[0]}
                 ;;
 
             '/'*)
@@ -639,7 +648,7 @@ moParse() {
             '=')
                 # Change delimiters
                 # Any two non-whitespace sequences separated by whitespace.
-                # TODO
+                # This tag is ignored.
                 moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
                 ;;
 
@@ -672,7 +681,7 @@ moParse() {
                 ;;
         esac
 
-        moIsBeginning=false
+        moIsBeginning=$moNextIsBeginning
         moSplit moContent "$moContent" '{{' '}}'
     done
 
@@ -682,11 +691,18 @@ moParse() {
 
 # Internal: Process a partial.
 #
-# Indentation should be applied to the entire partial
+# Indentation should be applied to the entire partial.
+#
+# This sends back the "is beginning" flag because the newline after a
+# standalone partial is consumed. That newline is very important in the middle
+# of content. We send back this flag to reset the processing loop's
+# `moIsBeginning` variable, so the software thinks we are back at the
+# beginning of a file and standalone processing continues to work.
 #
 # Prefix all variables.
 #
-# $1 - Name of destination "content" variable.
+# $1 - Name of destination variable. Element [0] is the content, [1] is the
+#      true/false flag indicating if we are at the beginning of content.
 # $2 - Content before the tag that was not yet written
 # $3 - Tag content
 # $4 - Content after the tag
@@ -696,24 +712,27 @@ moParse() {
 # Returns nothing.
 moPartial() {
     # Namespace variables here to prevent conflicts.
-    local moContent moFilename moIndent moPartial moStandalone moUnindented
+    local moContent moFilename moIndent moIsBeginning moPartial moStandalone moUnindented
 
     if moIsStandalone moStandalone "$2" "$4" "$5"; then
         moStandalone=( $moStandalone )
         echo -n "${2:0:${moStandalone[0]}}"
         moIndent=${2:${moStandalone[0]}}
         moContent=${4:${moStandalone[1]}}
+        moIsBeginning=true
     else
         moIndent=""
         echo -n "$2"
         moContent=$4
+        moIsBeginning=$5
     fi
 
     moTrimWhitespace moFilename "${3:1}"
 
     # Execute in subshell to preserve current cwd and environment
     (
-        # TODO:  Remove dirname and use a function instead
+        # It would be nice to remove `dirname` and use a function instead,
+        # but that's difficult when you're only given filenames.
         cd "$(dirname -- "$moFilename")" || exit 1
         moUnindented="$(
             moLoadFile moPartial "${moFilename##*/}"
@@ -727,7 +746,13 @@ moPartial() {
         echo -n "$moPartial"
     ) || exit 1
 
-    local "$1" && moIndirect "$1" "$moContent"
+    # If this is a standalone tag, the trailing newline after the tag is
+    # removed and the contents of the partial are added, which typically
+    # contain a newline. We need to send a signal back to the processing
+    # loop that the moIsBeginning flag needs to be turned on again.
+    #
+    # [0] is the content, [1] is that flag.
+    local "$1" && moIndirectArray "$1" "$moContent" "$moIsBeginning"
 }
 
 

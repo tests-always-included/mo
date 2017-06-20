@@ -1,0 +1,13 @@
+With spacing
+    {{> indented-partials.partial}}
+
+    {{> indented-partials.partial}}
+
+Without spacing
+    {{> indented-partials.partial}}
+    {{> indented-partials.partial}}
+
+With text
+    {{> indented-partials.partial}}
+    text
+    {{> indented-partials.partial}}
