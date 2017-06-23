@@ -110,7 +110,7 @@ mo() (
         done
     fi
 
-    moGetContent moContent "${files[@]}"
+    moGetContent moContent "${files[@]}" || return 1
     moParse "$moContent" "" true
 )
 
@@ -246,7 +246,7 @@ moGetContent() {
             content="$content"'{{>'"$filename"'}}'
         done
     else
-        moLoadFile content /dev/stdin
+        moLoadFile content /dev/stdin || return 1
     fi
 
     local "$target" && moIndirect "$target" "$content"
@@ -526,7 +526,7 @@ moLoadFile() {
     # As a future optimization, it would be worth considering removing
     # cat and replacing this with a read loop.
 
-    content=$(cat -- "$2"; echo '.')
+    content=$(cat -- "$2" && echo '.') || return 1
     len=$((${#content} - 1))
     content=${content:0:$len}  # Remove last dot
 
@@ -735,7 +735,7 @@ moPartial() {
         # but that's difficult when you're only given filenames.
         cd "$(dirname -- "$moFilename")" || exit 1
         moUnindented="$(
-            moLoadFile moPartial "${moFilename##*/}"
+            moLoadFile moPartial "${moFilename##*/}" || exit 1
             moParse "${moPartial}" "$6" true
 
             # Fix bash handling of subshells and keep trailing whitespace.
