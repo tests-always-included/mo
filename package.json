@@ -1,0 +1,10 @@
+{
+    "dependencies": {
+        "async": "*"
+    },
+    "scripts": {
+        "clean": "rm -rf package-lock.json node_modules/ spec/",
+        "install-tests": "npm install; git clone https://github.com/mustache/spec.git spec",
+        "test": "node run-spec.js spec/specs/*.json"
+    }
+}

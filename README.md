@@ -144,11 +144,7 @@ Developing
 
 Check out the code and hack away.  Please add tests to show off bugs before fixing them.  New functionality should also be covered by a test.
 
-First you need to get the official tests.  This command will pull them down and put those tests into a "spec" folder.
-
-    git clone https://github.com/mustache/spec.git spec
-
-After that you need to install node.js and run `npm install async` (no, I didn't make a package.json to just list one dependency).  Finally, `./run-spec.js spec/specs/*.json` will run against the official tests - there's over 100 of them.
+First, make sure you install Node.js. After that, run `npm run install-tests` to get the dependencies and the repository of YAML tests. Run `npm run test` to run the JavaScript tests. There's over 100 of them, which is great. Not all of them will pass, but that's discussed later.
 
 When submitting patches, make sure to run them past [ShellCheck] and ensure no problems are found.  Also please use Bash 3 syntax if you are manipulating arrays.
 

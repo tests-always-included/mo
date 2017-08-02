@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-var async, exec, fs, summary, specFiles;
+var async, exec, fs, summary;
 
 function makeShellString(value) {
     if (typeof value === 'string') {
@@ -71,7 +71,8 @@ function runTest(test, done) {
     Object.keys(test.data).forEach(function (name) {
         script.push(addToEnvironment(name, test.data[name]));
     });
-    script.push('. mo spec-runner/spec-template');
+    script.push('. mo');
+    script.push('mo spec-runner/spec-template');
     test.script = script.join('\n');
     async.series([
         function (taskDone) {
