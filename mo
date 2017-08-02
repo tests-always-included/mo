@@ -599,7 +599,7 @@ moParse() {
                     elif moIsArray "$moTag"; then
                         eval "moLoop \"\${moBlock[0]}\" \"$moTag\" \"\${!${moTag}[@]}\""
                     else
-                        moParse "${moBlock[0]}" "$moCurrent" false
+                        moParse "${moBlock[0]}" "$moCurrent" true
                     fi
                 fi
 

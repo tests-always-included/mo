@@ -11,3 +11,8 @@ With text
     {{> indented-partials.partial}}
     text
     {{> indented-partials.partial}}
+
+In a conditional
+{{#thisIsTrue}}
+    {{> indented-partials.partial}}
+{{/thisIsTrue}}
