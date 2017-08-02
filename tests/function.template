@@ -1,3 +1,4 @@
 {{#wrapped}}
   {{name}} is awesome.
 {{/wrapped}}
+... this is the last line.

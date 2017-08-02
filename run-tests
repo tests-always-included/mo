@@ -21,7 +21,7 @@ for TEST in tests/*.expected; do
             . "${BASE}.env"
             echo "Do not read this input" | mo "${BASE}.template"
         fi
-    ) | diff -wU5 - "${TEST}" > "${BASE}.diff"
+    ) | diff -U5 - "${TEST}" > "${BASE}.diff"
 
     if [[ $? -ne 0 ]]; then
         echo "FAIL"

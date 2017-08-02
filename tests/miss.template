@@ -1,4 +1,4 @@
-* {{name}}
-* {{age}}
-* {{company}}
-* {{{company}}}
+* .{{name}}.
+* .{{age}}.
+* .{{company}}.
+* .{{{company}}}.
