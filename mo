@@ -115,6 +115,24 @@ mo() (
 )
 
 
+# Internal: Call a function.
+#
+# $1 - Function to call
+# $2 - Content to pass
+# $3 - Additional arguments as a single string
+#
+# This can be dangerous, especially if you are using tags like
+# {{someFunction ; rm -rf / }}
+#
+# Returns nothing.
+moCallFunction() {
+    local moCommand
+
+    printf -v moCommand "%q %q %s" "$1" "$2" "$3"
+    eval "$moCommand"
+}
+
+
 # Internal: Scan content until the right end tag is found.  Creates an array
 # with the following members:
 #
@@ -567,7 +585,7 @@ moLoop() {
 moParse() {
     # Keep naming variables mo* here to not overwrite needed variables
     # used in the string replacements
-    local moBlock moContent moCurrent moIsBeginning moNextIsBeginning moTag
+    local moArgs moBlock moContent moCurrent moIsBeginning moNextIsBeginning moTag
 
     moCurrent=$2
     moIsBeginning=$3
@@ -585,6 +603,13 @@ moParse() {
                 # Sets context
                 moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
                 moTrimWhitespace moTag "${moTag:1}"
+                
+                # Split arguments from the tag name. Arguments are passed to
+                # functions.
+                moArgs=$moTag
+                moTag=${moTag%% *}
+                moTag=${moTag%%$'\t'*}
+                moArgs=${moArgs:${#moTag}}
                 moFindEndTag moBlock "$moContent" "$moTag"
                 moFullTagName moTag "$moCurrent" "$moTag"
 
@@ -593,7 +618,7 @@ moParse() {
                     if moIsFunction "$moTag"; then
                         #: Consider piping the output to moGetContent
                         #: so the lambda does not execute in a subshell?
-                        moContent=$($moTag "${moBlock[0]}")
+                        moContent=$(moCallFunction "$moTag" "${moBlock[0]}" "$moArgs")
                         moParse "$moContent" "$moCurrent" false
                         moContent="${moBlock[2]}"
                     elif moIsArray "$moTag"; then
@@ -658,11 +683,16 @@ moParse() {
                 moContent="${moTag:1}"'}}'"$moContent"
                 moSplit moContent "$moContent" '}}}'
                 moTrimWhitespace moTag "${moContent[0]}"
+                moArgs=$moTag
+                moTag=${moTag%% *}
+                moTag=${moTag%%$'\t'*}
+                moArgs=${moArgs:${#moTag}}
                 moFullTagName moTag "$moCurrent" "$moTag"
                 moContent=${moContent[1]}
 
                 # Now show the value
-                moShow "$moTag" "$moCurrent"
+                # Quote moArgs here, do not quote it later.
+                moShow "$moTag" "$moCurrent" "$moArgs"
                 ;;
 
             '&'*)
@@ -676,8 +706,14 @@ moParse() {
             *)
                 # Normal environment variable or function call
                 moStandaloneDenied moContent "${moContent[@]}"
+                moArgs=$moTag
+                moTag=${moTag%% *}
+                moTag=${moTag%%$'\t'*}
+                moArgs=${moArgs:${#moTag}}
                 moFullTagName moTag "$moCurrent" "$moTag"
-                moShow "$moTag" "$moCurrent"
+
+                # Quote moArgs here, do not quote it later.
+                moShow "$moTag" "$moCurrent" "$moArgs"
                 ;;
         esac
 
@@ -763,6 +799,7 @@ moPartial() {
 #
 # $1 - Name of environment variable or function
 # $2 - Current context
+# $3 - Arguments string if $1 is a function
 #
 # Returns nothing.
 moShow() {
@@ -770,7 +807,7 @@ moShow() {
     local moJoined moNameParts
 
     if moIsFunction "$1"; then
-        CONTENT=$($1 "")
+        CONTENT=$(moCallFunction "$1" "" "$3")
         moParse "$CONTENT" "$2" false
         return 0
     fi
