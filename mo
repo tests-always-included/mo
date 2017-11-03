@@ -29,6 +29,10 @@
 # Public: Template parser function.  Writes templates to stdout.
 #
 # $0             - Name of the mo file, used for getting the help message.
+# --allow-function-arguments
+#                - Permit functions in templates to be called with additional
+#                  arguments. This puts template data directly in to the path
+#                  of an eval statement. Use with caution.
 # --fail-not-set - Fail upon expansion of an unset variable.  Default behavior
 #                  is to silently ignore and expand into empty string.
 # --false        - Treat "false" as an empty value.  You may set the
@@ -43,6 +47,12 @@
 #
 # Mo uses the following environment variables:
 #
+# MO_ALLOW_FUNCTION_ARGUMENTS
+#                     - When set to a non-empty value, this allows functions
+#                       referenced in templates to receive additional
+#                       options and arguments. This puts the content from the
+#                       template directly into an eval statement. Use with
+#                       extreme care.
 # MO_FAIL_ON_UNSET    - When set to a non-empty value, expansion of an unset
 #                       env variable will be aborted with an error.
 # MO_FALSE_IS_EMPTY   - When set to a non-empty value, the string "false"
@@ -72,6 +82,11 @@ mo() (
                     -h|--h|--he|--hel|--help|-\?)
                         moUsage "$0"
                         exit 0
+                        ;;
+
+                    --allow-function-arguments)
+                        # shellcheck disable=SC2030
+                        MO_ALLOW_FUNCTION_ARGUMENTS=true
                         ;;
 
                     --fail-not-set)
@@ -128,8 +143,13 @@ mo() (
 moCallFunction() {
     local moCommand
 
-    printf -v moCommand "%q %q %s" "$1" "$2" "$3"
-    eval "$moCommand"
+    # shellcheck disable=SC2031
+    if [[ -n "$MO_ALLOW_FUNCTION_ARGUMENTS" ]]; then
+        printf -v moCommand "%q %q %s" "$1" "$2" "$3"
+        eval "$moCommand"
+    else
+        "$1" "$2"
+    fi
 }
 
 

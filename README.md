@@ -115,6 +115,8 @@ The result?  You get a list of the five elements in the array.  It is vital that
 
 There are more scripts available in the [demos directory](demo/) that could help illustrate how you would use this program.
 
+There are additional features that the program supports. Try using `mo --help` to see what is available.
+
 
 Concessions
 -----------
