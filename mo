@@ -835,13 +835,13 @@ moShow() {
 
     moSplit moNameParts "$1" "."
 
-    if [[ -z "${moNameParts[1]}" ]]; then
+    if [[ -z "${moNameParts[1]-}" ]]; then
         if moIsArray "$1"; then
             eval moJoin moJoined "," "\${$1[@]}"
             echo -n "$moJoined"
         else
             # shellcheck disable=SC2031
-            if [[ -z "$MO_FAIL_ON_UNSET" ]] || moTestVarSet "$1"; then
+            if [[ -z "${MO_FAIL_ON_UNSET-}" ]] || moTestVarSet "$1"; then
                 echo -n "${!1}"
             else
                 echo "Env variable not set: $1" >&2
