@@ -841,9 +841,9 @@ moShow() {
             echo -n "$moJoined"
         else
             # shellcheck disable=SC2031
-            if [[ -z "${MO_FAIL_ON_UNSET-}" ]] || moTestVarSet "$1"; then
+            if moTestVarSet "$1"; then
                 echo -n "${!1}"
-            else
+            elif [[ -n "${MO_FAIL_ON_UNSET-}" ]]; then
                 echo "Env variable not set: $1" >&2
                 exit 1
             fi
