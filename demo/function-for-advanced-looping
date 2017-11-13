@@ -3,6 +3,9 @@
 cd "$(dirname "$0")" # Go to the script's directory
 
 EVERY_REPO() {
+    # The block contents come in through standard input. Capture it here.
+    content=$(cat)
+
     echo "# Starting EVERY_REPO"
 
     # Get list of repos
@@ -14,7 +17,7 @@ EVERY_REPO() {
         # It rewrites {{__REPO__.name}} into {{resque.name}}, for instance.
         # You can prefix your environment variables and do other things as well.
         
-        echo -n "$1" | sed "s/__REPO__/${REPO}/"
+        echo "$content" | sed "s/__REPO__/${REPO}/"
 
         echo "## Looped one time for repo: $REPO"
     done

@@ -141,15 +141,16 @@ mo() (
 #
 # Returns nothing.
 moCallFunction() {
-    local moCommand
+    local moArgs
+
+    moArgs=()
 
     # shellcheck disable=SC2031
     if [[ -n "$MO_ALLOW_FUNCTION_ARGUMENTS" ]]; then
-        printf -v moCommand "%q %q %s" "$1" "$2" "$3"
-        eval "$moCommand"
-    else
-        "$1" "$2"
+        moArgs=$3
     fi
+
+    echo -n "$2" | eval "$1" "$moArgs"
 }
 
 

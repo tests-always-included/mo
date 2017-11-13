@@ -2,13 +2,17 @@
 
 cd "$(dirname "$0")"/..
 
-date-string() { date; }
-wrapper() { echo -n "*** $1 ***"; }
+date-string() {
+    date
+}
+wrapper() {
+    echo -n "*** $(cat) ***"
+}
 
 export IP=127.0.0.1
 export ALLOWED_HOSTS=( 192.168.0.1 192.168.0.2 192.168.0.3 )
 
-. mo  # Keep in mind this script is executing in the parent directory
+. ./mo  # Keep in mind this script is executing in the parent directory
 cat <<EOF | mo
 # {{#wrapper}}OH SO IMPORTANT{{/wrapper}}
 # This file automatically generated at {{date-string}}
