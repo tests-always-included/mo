@@ -146,7 +146,7 @@ moCallFunction() {
     moArgs=()
 
     # shellcheck disable=SC2031
-    if [[ -n "$MO_ALLOW_FUNCTION_ARGUMENTS" ]]; then
+    if [[ -n "${MO_ALLOW_FUNCTION_ARGUMENTS-}" ]]; then
         moArgs=$3
     fi
 
