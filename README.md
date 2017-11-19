@@ -41,7 +41,7 @@ There are a few ways you can install this tool.  How you install it depends on h
 You can install this file in `/usr/local/bin/` or `/usr/bin/` by simply downloading it, changing the permissions, then moving it to the right location.  Double check that your system's PATH includes the destination folder, otherwise users may have a hard time starting the command.
 
     # Download
-    curl -sS https://git.io/get-mo -o mo
+    curl -sSL https://git.io/get-mo -o mo
 
     # Make executable
     chmod +x mo
