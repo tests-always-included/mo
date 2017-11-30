@@ -1030,11 +1030,14 @@ moTrimWhitespace() {
 # Returns nothing.
 moUsage() {
     grep '^#/' "${MO_ORIGINAL_COMMAND}" | cut -c 4-
+    echo ""
+    set | grep ^MO_VERSION=
 }
 
 
 # Save the original command's path for usage later
 MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)/${BASH_SOURCE[0]##*/}"
+MO_VERSION="2.0.4"
 
 # If sourced, load all functions.
 # If executed, perform the actions as expected.
