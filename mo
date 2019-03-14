@@ -11,12 +11,18 @@
 #/
 #/ Simple usage:
 #/
-#/    mo [--false] [--help] [--source=FILE] filenames...
+#/    mo [OPTIONS] filenames...
 #/
-#/ --fail-not-set - Fail upon expansion of an unset variable.
-#/ --false        - Treat the string "false" as empty for conditionals.
-#/ --help         - This message.
-#/ --source=FILE  - Load FILE into the environment before processing templates.
+#/ Options:
+#/
+#/    -u, --fail-not-set
+#/          - Fail upon expansion of an unset variable.
+#/    -e, --false
+#/          - Treat the string "false" as empty for conditionals.
+#/    -h, --help
+#/          - This message.
+#/    -s=FILE, --source=FILE
+#/          - Load FILE into the environment before processing templates.
 #
 # Mo is under a MIT style licence with an additional non-advertising clause.
 # See LICENSE.md for the full text.
@@ -32,14 +38,17 @@
 # --allow-function-arguments
 #                - Permit functions in templates to be called with additional
 #                  arguments. This puts template data directly in to the path
-#                  of an eval statement. Use with caution.
-# --fail-not-set - Fail upon expansion of an unset variable.  Default behavior
+#                  of an eval statement. Use with caution. Not listed in the
+#                  help because it only makes sense when mo is sourced.
+# -u, --fail-not-set
+#                - Fail upon expansion of an unset variable.  Default behavior
 #                  is to silently ignore and expand into empty string.
-# --false        - Treat "false" as an empty value.  You may set the
+# -e, --false    - Treat "false" as an empty value.  You may set the
 #                  MO_FALSE_IS_EMPTY environment variable instead to a non-empty
 #                  value to enable this behavior.
-# --help         - Display a help message.
-# --source=FILE  - Source a file into the environment before processint
+# -h, --help     - Display a help message.
+# -s=FILE, --source=FILE
+#                - Source a file into the environment before processint
 #                  template files.
 # --             - Used to indicate the end of options.  You may optionally
 #                  use this when filenames may start with two hyphens.
@@ -89,18 +98,22 @@ mo() (
                         MO_ALLOW_FUNCTION_ARGUMENTS=true
                         ;;
 
-                    --fail-not-set)
+                    -u | --fail-not-set)
                         # shellcheck disable=SC2030
                         MO_FAIL_ON_UNSET=true
                         ;;
 
-                    --false)
+                    -e | --false)
                         # shellcheck disable=SC2030
                         MO_FALSE_IS_EMPTY=true
                         ;;
 
-                    --source=*)
-                        f2source="${arg#--source=}"
+                    -s=* | --source=*)
+                        if [[ "$arg" == --source=* ]]; then
+                            f2source="${arg#--source=}"
+                        else
+                            f2source="${arg#-s=}"
+                        fi
 
                         if [[ -f "$f2source" ]]; then
                             # shellcheck disable=SC1090
