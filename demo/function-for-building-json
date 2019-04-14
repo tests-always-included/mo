@@ -1,0 +1,39 @@
+#!/bin/bash
+
+cd "$(dirname "$0")" # Go to the script's directory
+
+# Detect if this is the first item and write a comma if it is.
+# Normally, I would track this using a variable, like so:
+#
+# COMMA_IF_NOT_FIRST_FLAG=false
+# COMMA_IF_NOT_FIRST() {
+#     $COMMA_IF_NOT_FIRST || echo ","
+#     COMMA_IF_NOT_FIRST_FLAG=true
+# }
+#
+# Since this function executes in a subshell, that approach will not work.
+# Instead, we peek inside mo and see what is being processed. If the variable
+# name in moParse() changes, this will need to get updated as well. An
+# alternate variable that is usable is context, but that is in moLoop() and is
+# two levels levels deep instead of just one.
+COMMA_IF_NOT_FIRST() {
+    [[ "${moCurrent#*.}" != "0" ]] && echo ","
+}
+
+# Create an array that will be embedded into the JSON. If you are manipulating
+# JSON, might I suggest you look at using jq? It's really good at processing
+# JSON.
+items=(
+    '{"position":"one","url":"1"}'
+    '{"position":"two","url":"2"}'
+    '{"position":"three","url":"3"}'
+)
+. ../mo
+cat <<EOF | mo
+{
+    {{#items}}
+    {{COMMA_IF_NOT_FIRST}}
+    {{.}}
+    {{/items}}
+}
+EOF
