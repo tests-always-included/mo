@@ -835,7 +835,6 @@ moPartial() {
         fi
 
         if [[ "$moFilename" != */* ]] && [[ ! -f "$moFilename" ]] && [[ -n "$MO_SEARCH_PATH" ]]; then
-            echo "searching"
             # Search the path for the file
             IFS=:
             
