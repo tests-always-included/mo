@@ -23,6 +23,8 @@
 #/          - This message.
 #/    -s=FILE, --source=FILE
 #/          - Load FILE into the environment before processing templates.
+#/    -p=PATH, --path=PATH
+#/          - Set a colon-delimited list of folders to search for templates.
 #
 # Mo is under a MIT style licence with an additional non-advertising clause.
 # See LICENSE.md for the full text.
@@ -34,47 +36,51 @@
 
 # Public: Template parser function.  Writes templates to stdout.
 #
-# $0             - Name of the mo file, used for getting the help message.
-# --allow-function-arguments
-#                - Permit functions in templates to be called with additional
-#                  arguments. This puts template data directly in to the path
-#                  of an eval statement. Use with caution. Not listed in the
-#                  help because it only makes sense when mo is sourced.
-# -u, --fail-not-set
-#                - Fail upon expansion of an unset variable.  Default behavior
-#                  is to silently ignore and expand into empty string.
-# -e, --false    - Treat "false" as an empty value.  You may set the
-#                  MO_FALSE_IS_EMPTY environment variable instead to a non-empty
-#                  value to enable this behavior.
-# -h, --help     - Display a help message.
-# -s=FILE, --source=FILE
-#                - Source a file into the environment before processint
-#                  template files.
-# --             - Used to indicate the end of options.  You may optionally
-#                  use this when filenames may start with two hyphens.
-# $@             - Filenames to parse.
+# $0 - Name of the mo file, used for getting the help message.
+# --allow-function-arguments - Permit functions in templates to be called with
+#         additional arguments. This puts template data directly in to the path
+#         of an eval statement. Use with caution. Not listed in the help
+#         because it only makes sense when mo is sourced.
+# --fail-not-set - (`-u`) Fail upon expansion of an unset variable.  Default
+#         behavior is to silently ignore and expand into empty string.
+# --false - (`-e`) Treat "false" as an empty value.  You may set the
+#         MO_FALSE_IS_EMPTY environment variable instead to a non-empty value
+#         to enable this behavior.
+# --help - (`-h)` Display a help message.
+# --source=FILE - (`-s=FILE`) Source a file into the environment before processing
+#         template files.
+# --path=PATH - (`-p=PATH`) Colon-separated list of paths to search for templates.
+#         They are relative to where `mo` was executed.
+# --  - Used to indicate the end of options.  You may use this when filenames
+#         start with hyphens.
+# $@ - Filenames to parse.
 #
 # Mo uses the following environment variables:
 #
-# MO_ALLOW_FUNCTION_ARGUMENTS
-#                     - When set to a non-empty value, this allows functions
-#                       referenced in templates to receive additional
-#                       options and arguments. This puts the content from the
-#                       template directly into an eval statement. Use with
-#                       extreme care.
-# MO_FAIL_ON_UNSET    - When set to a non-empty value, expansion of an unset
-#                       env variable will be aborted with an error.
-# MO_FALSE_IS_EMPTY   - When set to a non-empty value, the string "false"
-#                       will be treated as an empty value for the purposes
-#                       of conditionals.
-# MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate
-#                       a help message.
+# MO_ALLOW_FUNCTION_ARGUMENTS - When set to a non-empty value, this allows
+#         functions referenced in templates to receive additional options and
+#         arguments. This puts the content from the template directly into an
+#         eval statement. Use with extreme care.
 #
-# Returns nothing.
+# MO_FAIL_ON_UNSET - When set to a non-empty value, expansion of an unset env
+#         variable will be aborted with an error.
+#
+# MO_FALSE_IS_EMPTY - When set to a non-empty value, the string "false" will be
+#         treated as an empty value for the purposes of conditionals.
+#
+# MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate a
+#         help message.
+#
+# MO_SEARCH_PATH - Colon-separated list of folders to search for templates.
+#         They are relative to where `mo` was executed.
+#
+# Returns true (0) when there are no errors. Sometimes returns (1) when there
+# are errors and sometimes those errors are consumed. It greatly depends on the
+# error and your options.
 mo() (
     # This function executes in a subshell so IFS is reset.
     # Namespace this variable so we don't conflict with desired values.
-    local moContent f2source files doubleHyphens
+    local moContent f2source files doubleHyphens paths
 
     IFS=$' \n\t'
     files=()
@@ -109,11 +115,7 @@ mo() (
                         ;;
 
                     -s=* | --source=*)
-                        if [[ "$arg" == --source=* ]]; then
-                            f2source="${arg#--source=}"
-                        else
-                            f2source="${arg#-s=}"
-                        fi
+                        f2source="${arg#*=}"
 
                         if [[ -f "$f2source" ]]; then
                             # shellcheck disable=SC1090
@@ -122,6 +124,10 @@ mo() (
                             echo "No such file: $f2source" >&2
                             exit 1
                         fi
+                        ;;
+
+                    -p=* | --path=*)
+                        MO_SEARCH_PATH="$(moProcessSearchPath "${arg#*=}")"
                         ;;
 
                     --)
@@ -141,6 +147,21 @@ mo() (
     moGetContent moContent "${files[@]}" || return 1
     moParse "$moContent" "" true
 )
+
+
+# Internal: Change relative paths into absolute paths
+moProcessSearchPath() {
+    local in out path startingPwd IFS
+
+    IFS=:
+    startingPwd=$PWD
+    
+    for path in $1; do
+        cd "$startingPwd" && cd "$path" 2>/dev/null && out="$out:$PWD"
+    done
+
+    echo "${out:1}"
+}
 
 
 # Internal: Call a function.
@@ -803,7 +824,40 @@ moPartial() {
     (
         # It would be nice to remove `dirname` and use a function instead,
         # but that's difficult when you're only given filenames.
-        cd "$(dirname -- "$moFilename")" || exit 1
+        if ! cd "$(dirname -- "$moFilename")"; then
+            if [[ -n "${MO_FAIL_ON_UNSET-}" ]]; then
+                echo "Error changing to directory: $(dirname -- "$moFilename")" >&2
+                exit 1
+            fi
+
+            # Mustache likes to be silent when there are errors.
+            exit 0
+        fi
+
+        if [[ "$moFilename" != */* ]] && [[ ! -f "$moFilename" ]] && [[ -n "$MO_SEARCH_PATH" ]]; then
+            echo "searching"
+            # Search the path for the file
+            IFS=:
+            
+            for moSearchPath in $MO_SEARCH_PATH; do
+                if [[ ! -f "$moFilename" ]]; then
+                    cd "$moSearchPath"
+                fi
+            done
+
+            IFS=$' \n\t'
+        fi
+
+        if [[ ! -f "${moFilename##*/}" ]]; then
+            if [[ -n "${MO_FAIL_ON_UNSET-}" ]]; then
+                echo "File does not exist: $PWD/${moFilename##*/}" >&2
+                exit 1
+            fi
+
+            # Mustache likes to be silent when there are errors.
+            exit 0
+        fi
+
         moUnindented="$(
             moLoadFile moPartial "${moFilename##*/}" || exit 1
             moParse "${moPartial}" "$6" true

@@ -27,7 +27,7 @@ Requirements
 * The "coreutils" package (`basename` and `cat`)
 * ... that's it.  Why?  Because bash **can**!
 
-If you intend to develop this and run the official specs, you also need node.js.
+If you intend to develop this and run the official specs, you also need Node.js.
 
 
 Installation

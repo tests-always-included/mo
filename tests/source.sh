@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 cd "${0%/*}"
-cat <<EOF | ../mo --source=source.vars
+. ../mo
+cat <<EOF | mo --source=source.vars
 {{VAR}}
 {{#ARR}}
 * {{.}}

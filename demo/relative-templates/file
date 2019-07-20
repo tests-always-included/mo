@@ -1,0 +1,7 @@
+This is "file"
+
+Child1 in different ways
+{{> child1 }}
+{{> ./child1 }}
+{{> ../relative-templates/child1 }}
+{{> deeper/../child1 }}

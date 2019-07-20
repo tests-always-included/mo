@@ -1,0 +1,3 @@
+* Child1
+{{> deeper/child2 }}
+{{> ../relative-templates/deeper/child2 }}

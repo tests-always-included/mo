@@ -9,9 +9,19 @@ Learn more about mustache templates at https://mustache.github.io/
 
 Simple usage:
 
-   mo [--false] [--help] [--source=FILE] filenames...
+   mo [OPTIONS] filenames...
 
---fail-not-set - Fail upon expansion of an unset variable.
---false        - Treat the string "false" as empty for conditionals.
---help         - This message.
---source=FILE  - Load FILE into the environment before processing templates.
+Options:
+
+   -u, --fail-not-set
+         - Fail upon expansion of an unset variable.
+   -e, --false
+         - Treat the string "false" as empty for conditionals.
+   -h, --help
+         - This message.
+   -s=FILE, --source=FILE
+         - Load FILE into the environment before processing templates.
+   -p=PATH, --path=PATH
+         - Set a colon-delimited list of folders to search for templates.
+
+MO_VERSION=2.0.4
