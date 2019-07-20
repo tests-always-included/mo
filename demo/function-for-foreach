@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+# Example for how #29 can get implemented.
+
+cd "$(dirname "$0")" # Go to the script's directory
+
+foreach() {
+    # Trying to use unique names
+    local foreachSourceName foreachIterator foreachEvalString foreachContent
+
+    foreachContent=$(cat)
+
+    if [[ "$2" != "as" && "$2" != "in" ]]; then
+        echo "Invalid foreach - bad format."
+    elif [[ "$(declare -p "$1")" != "declare -"[aA]* ]]; then
+        echo "$1 is not an array"
+    else
+        foreachSourceName="${1}[@]"
+
+        for foreachIterator in "${!foreachSourceName}"; do
+            foreachEvalString=$(declare -p "$foreachIterator")
+            foreachEvalString="declare -A $3=${foreachEvalString#*=}"
+            eval "$foreachEvalString"
+            echo "$foreachContent" | mo
+        done
+    fi
+}
+
+
+# The links are associative arrays
+declare -A resque hub rip
+resque=([name]=Resque [url]=http://example.com/resque)
+hub=([name]=Hub [url]=http://example.com/hub)
+rip=([name]=Rip [url]=http://example.com/rip)
+
+# This is a list of the link arrays
+links=(resque hub rip)
+
+# Source mo in order to work with arrays
+. ../mo
+
+# Process the template
+cat <<EOF | mo --allow-function-arguments
+Here are your links:
+{{#foreach links as link}}
+ * [{{link.name}}]({{link.url}})
+{{/foreach}}
+
+EOF
