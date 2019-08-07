@@ -1,0 +1,4 @@
+No args: [] - done
+One arg: [one] - done
+Multiple arguments: [aa bb cc 'x' " ! {[_.|] - done
+Evil: [bla; cat /etc/issue] - done

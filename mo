@@ -62,6 +62,8 @@
 #                       options and arguments. This puts the content from the
 #                       template directly into an eval statement. Use with
 #                       extreme care.
+# MO_ARGS             - Arguments passed to the function,
+#                       only if MO_ALLOW_FUNCTION_ARGUMENTS is unset
 # MO_FAIL_ON_UNSET    - When set to a non-empty value, expansion of an unset
 #                       env variable will be aborted with an error.
 # MO_FALSE_IS_EMPTY   - When set to a non-empty value, the string "false"
@@ -156,14 +158,14 @@ mo() (
 moCallFunction() {
     local moArgs
 
-    moArgs=()
-
     # shellcheck disable=SC2031
     if [[ -n "${MO_ALLOW_FUNCTION_ARGUMENTS-}" ]]; then
         moArgs=$3
+        echo -n "$2" | eval "$1" "$moArgs"
+    else
+        moTrimWhitespace moArgs "$3"
+        echo -n "$2" | MO_ARGS="$moArgs" eval "$1"
     fi
-
-    echo -n "$2" | eval "$1" "$moArgs"
 }
 
 
