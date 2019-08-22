@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+cd "$(dirname "$0")" # Go to the script's directory
+
+
+export OPEN="{{"
+export CLOSE="}}"
+cat <<'EOF' | mo
+You can use environment variables to write output that has double braces.
+
+    {{OPEN}}sampleTag{{CLOSE}}
+EOF
