@@ -639,7 +639,7 @@ moParse() {
                 # Sets context
                 moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
                 moTrimWhitespace moTag "${moTag:1}"
-                
+
                 # Split arguments from the tag name. Arguments are passed to
                 # functions.
                 moArgs=$moTag
