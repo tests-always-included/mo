@@ -155,7 +155,7 @@ mo() (
 #
 # Returns nothing.
 moCallFunction() {
-    local moArgs moFunctionArgs
+    local moArgs moFunctionArgs moFunctionResult
 
     moArgs=()
     moTrimWhitespace moFunctionArgs "$3"
@@ -166,6 +166,12 @@ moCallFunction() {
     fi
 
     echo -n "$2" | MO_FUNCTION_ARGS="$moFunctionArgs" eval "$1" "$moArgs"
+    moFunctionResult=$?
+
+    if [[ -n "${MO_FAIL_ON_FUNCTION-}" && "$moFunctionResult" != 0 ]]; then
+        echo "Function '$1' with args '${moArgs@}' failed with status code $moFunctionResult"
+        exit $moFunctionResult
+    fi
 }
 
 
