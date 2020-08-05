@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-cd "${0%/*}"
+cd "${0%/*}" || exit 1
 ../mo partial-missing.template 2>&1
 
 if [[ $? -ne 1 ]]; then

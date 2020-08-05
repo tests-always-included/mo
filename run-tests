@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
-cd "${0%/*}"
+cd "${0%/*}" || exit 1
 
+# shellcheck disable=SC1091
 . ./mo
 PASS=0
 FAIL=0
@@ -18,13 +19,16 @@ for TEST in tests/*.expected; do
             "${BASE}.sh"
         else
             # Fall back to using .env and .template
+            # shellcheck disable=SC1090
             . "${BASE}.env"
             echo "Do not read this input" | mo "${BASE}.template"
         fi
     ) | diff -U5 - "${TEST}" > "${BASE}.diff"
 
-    if [[ $? -ne 0 ]]; then
-        echo "FAIL"
+    statusCode=$?
+
+    if [[ $statusCode -ne 0 ]]; then
+        echo "FAIL (status code $statusCode)"
         FAIL=$(( FAIL + 1 ))
     else
         echo "ok"

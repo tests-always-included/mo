@@ -16,13 +16,15 @@
 #/ Options:
 #/
 #/    -u, --fail-not-set
-#/          - Fail upon expansion of an unset variable.
+#/          Fail upon expansion of an unset variable.
+#/    -x, --fail-on-function
+#/          Fail when a function returns a non-zero status code.
 #/    -e, --false
-#/          - Treat the string "false" as empty for conditionals.
+#/          Treat the string "false" as empty for conditionals.
 #/    -h, --help
-#/          - This message.
+#/          This message.
 #/    -s=FILE, --source=FILE
-#/          - Load FILE into the environment before processing templates.
+#/          Load FILE into the environment before processing templates.
 #
 # Mo is under a MIT style licence with an additional non-advertising clause.
 # See LICENSE.md for the full text.
@@ -34,42 +36,63 @@
 
 # Public: Template parser function.  Writes templates to stdout.
 #
-# $0             - Name of the mo file, used for getting the help message.
-# --allow-function-arguments
-#                - Permit functions in templates to be called with additional
-#                  arguments. This puts template data directly in to the path
-#                  of an eval statement. Use with caution. Not listed in the
-#                  help because it only makes sense when mo is sourced.
-# -u, --fail-not-set
-#                - Fail upon expansion of an unset variable.  Default behavior
-#                  is to silently ignore and expand into empty string.
-# -e, --false    - Treat "false" as an empty value.  You may set the
-#                  MO_FALSE_IS_EMPTY environment variable instead to a non-empty
-#                  value to enable this behavior.
-# -h, --help     - Display a help message.
-# -s=FILE, --source=FILE
-#                - Source a file into the environment before processint
-#                  template files.
-# --             - Used to indicate the end of options.  You may optionally
-#                  use this when filenames may start with two hyphens.
-# $@             - Filenames to parse.
+# $0 - Name of the mo file, used for getting the help message.
+# $@ - Filenames to parse.
+#
+# Options:
+#
+#     --allow-function-arguments
+#
+# Permit functions in templates to be called with additional arguments.  This
+# puts template data directly in to the path of an eval statement. Use with
+# caution. Not listed in the help because it only makes sense when mo is
+# sourced.
+#
+#     -u, --fail-not-set
+#
+# Fail upon expansion of an unset variable.  Default behavior is to silently
+# ignore and expand into empty string.
+#
+#     -x, --fail-on-function
+#
+# Fail when a function used by a template returns an error status code.
+# Alternately, ou may set the MO_FAIL_ON_FUNCTION environment variable to a
+# non-empty value to enable this behavior.
+#
+#     -e, --false
+#
+# Treat "false" as an empty value.  You may set the MO_FALSE_IS_EMPTY
+# environment variable instead to a non-empty value to enable this behavior.
+#
+#     -h, --help
+#
+# Display a help message.
+#
+#     -s=FILE, --source=FILE
+#
+# Source a file into the environment before processing template files.
+#
+#     --
+#
+# Used to indicate the end of options.  You may optionally use this when
+# filenames may start with two hyphens.
 #
 # Mo uses the following environment variables:
 #
-# MO_ALLOW_FUNCTION_ARGUMENTS
-#                     - When set to a non-empty value, this allows functions
-#                       referenced in templates to receive additional
-#                       options and arguments. This puts the content from the
-#                       template directly into an eval statement. Use with
-#                       extreme care.
-# MO_FUNCTION_ARGS    - Arguments passed to the function
-# MO_FAIL_ON_UNSET    - When set to a non-empty value, expansion of an unset
-#                       env variable will be aborted with an error.
-# MO_FALSE_IS_EMPTY   - When set to a non-empty value, the string "false"
-#                       will be treated as an empty value for the purposes
-#                       of conditionals.
-# MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate
-#                       a help message.
+# MO_ALLOW_FUNCTION_ARGUMENTS - When set to a non-empty value, this allows
+#                  functions referenced in templates to receive additional
+#                  options and arguments. This puts the content from the
+#                  template directly into an eval statement. Use with extreme
+#                  care.
+# MO_FUNCTION_ARGS - Arguments passed to the function
+# MO_FAIL_ON_FUNCTION - If a function returns a non-zero status code, abort
+#                  with an error.
+# MO_FAIL_ON_UNSET - When set to a non-empty value, expansion of an unset env
+#                  variable will be aborted with an error.
+# MO_FALSE_IS_EMPTY - When set to a non-empty value, the string "false" will be
+#                  treated as an empty value for the purposes of conditionals.
+# MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate a
+#                  help message.
 #
 # Returns nothing.
 mo() (
@@ -84,8 +107,8 @@ mo() (
     if [[ $# -gt 0 ]]; then
         for arg in "$@"; do
             if $doubleHyphens; then
-                # After we encounter two hyphens together, all the rest
-                # of the arguments are files.
+                #: After we encounter two hyphens together, all the rest
+                #: of the arguments are files.
                 files=("${files[@]}" "$arg")
             else
                 case "$arg" in
@@ -102,6 +125,11 @@ mo() (
                     -u | --fail-not-set)
                         # shellcheck disable=SC2030
                         MO_FAIL_ON_UNSET=true
+                        ;;
+
+                    -x | --fail-on-function)
+                        # shellcheck disable=SC2030
+                        MO_FAIL_ON_FUNCTION=true
                         ;;
 
                     -e | --false)
@@ -126,12 +154,12 @@ mo() (
                         ;;
 
                     --)
-                        # Set a flag indicating we've encountered double hyphens
+                        #: Set a flag indicating we've encountered double hyphens
                         doubleHyphens=true
                         ;;
 
                     *)
-                        # Every arg that is not a flag or a option should be a file
+                        #: Every arg that is not a flag or a option should be a file
                         files=(${files[@]+"${files[@]}"} "$arg")
                         ;;
                 esac
@@ -146,32 +174,39 @@ mo() (
 
 # Internal: Call a function.
 #
-# $1 - Function to call
-# $2 - Content to pass
-# $3 - Additional arguments as a single string
+# $1 - Variable for output
+# $2 - Function to call
+# $3 - Content to pass
+# $4 - Additional arguments as a single string
 #
 # This can be dangerous, especially if you are using tags like
 # {{someFunction ; rm -rf / }}
 #
 # Returns nothing.
 moCallFunction() {
-    local moArgs moFunctionArgs moFunctionResult
+    local moArgs moContent moFunctionArgs moFunctionResult
 
     moArgs=()
-    moTrimWhitespace moFunctionArgs "$3"
+    moTrimWhitespace moFunctionArgs "$4"
 
     # shellcheck disable=SC2031
     if [[ -n "${MO_ALLOW_FUNCTION_ARGUMENTS-}" ]]; then
-        moArgs=$3
+        # Intentionally bad behavior
+        # shellcheck disable=SC2206
+        moArgs=($4)
     fi
 
-    echo -n "$2" | MO_FUNCTION_ARGS="$moFunctionArgs" eval "$1" "$moArgs"
-    moFunctionResult=$?
+    moContent=$(echo -n "$3" | MO_FUNCTION_ARGS="$moFunctionArgs" eval "$2" "${moArgs[@]}") || {
+        moFunctionResult=$?
+        # shellcheck disable=SC2031
+        if [[ -n "${MO_FAIL_ON_FUNCTION-}" && "$moFunctionResult" != 0 ]]; then
+            echo "Function '$2' with args (${moArgs[*]+"${moArgs[@]}"}) failed with status code $moFunctionResult"
+            exit "$moFunctionResult"
+        fi
+    }
 
-    if [[ -n "${MO_FAIL_ON_FUNCTION-}" && "$moFunctionResult" != 0 ]]; then
-        echo "Function '$1' with args '${moArgs@}' failed with status code $moFunctionResult"
-        exit $moFunctionResult
-    fi
+    # shellcheck disable=SC2031
+    local "$1" && moIndirect "$1" "$moContent"
 }
 
 
@@ -223,6 +258,7 @@ moFindEndTag() {
                     if [[ -z "${4-}" ]] && moIsStandalone standaloneBytes "$scanned" "${content[2]}" true; then
                         #: This is also a standalone tag - clean up whitespace
                         #: and move those whitespace bytes to the "tag" element
+                        # shellcheck disable=SC2206
                         standaloneBytes=( $standaloneBytes )
                         content[1]="${scanned:${standaloneBytes[0]}}${content[1]}${content[2]:0:${standaloneBytes[1]}}"
                         scanned="${scanned:0:${standaloneBytes[0]}}"
@@ -294,22 +330,22 @@ moFullTagName() {
 #
 # Returns nothing.
 moGetContent() {
-    local content filename target
+    local moContent moFilename moTarget
 
-    target=$1
+    moTarget=$1
     shift
     if [[ "${#@}" -gt 0 ]]; then
-        content=""
+        moContent=""
 
-        for filename in "$@"; do
+        for moFilename in "$@"; do
             #: This is so relative paths work from inside template files
-            content="$content"'{{>'"$filename"'}}'
+            moContent="$moContent"'{{>'"$moFilename"'}}'
         done
     else
-        moLoadFile content /dev/stdin || return 1
+        moLoadFile moContent || return 1
     fi
 
-    local "$target" && moIndirect "$target" "$content"
+    local "$moTarget" && moIndirect "$moTarget" "$moContent"
 }
 
 
@@ -484,6 +520,7 @@ moIsFunction() {
     local functionList functionName
 
     functionList=$(declare -F)
+    # shellcheck disable=SC2206
     functionList=( ${functionList//declare -f /} )
 
     for functionName in "${functionList[@]}"; do
@@ -575,7 +612,7 @@ moJoin() {
 # Internal: Read a file into a variable.
 #
 # $1 - Variable name to receive the file's content
-# $2 - Filename to load
+# $2 - Filename to load - if empty, defaults to /dev/stdin
 #
 # Returns nothing.
 moLoadFile() {
@@ -586,7 +623,7 @@ moLoadFile() {
     # As a future optimization, it would be worth considering removing
     # cat and replacing this with a read loop.
 
-    content=$(cat -- "$2" && echo '.') || return 1
+    content=$(cat -- "${2:-/dev/stdin}" && echo '.') || return 1
     len=$((${#content} - 1))
     content=${content:0:$len}  # Remove last dot
 
@@ -658,9 +695,7 @@ moParse() {
                 if moTest "$moTag"; then
                     # Show / loop / pass through function
                     if moIsFunction "$moTag"; then
-                        #: Consider piping the output to moGetContent
-                        #: so the lambda does not execute in a subshell?
-                        moContent=$(moCallFunction "$moTag" "${moBlock[0]}" "$moArgs")
+                        moCallFunction moContent "$moTag" "${moBlock[0]}" "$moArgs"
                         moParse "$moContent" "$moCurrent" false
                         moContent="${moBlock[2]}"
                     elif moIsArray "$moTag"; then
@@ -793,6 +828,7 @@ moPartial() {
     local moContent moFilename moIndent moIsBeginning moPartial moStandalone moUnindented
 
     if moIsStandalone moStandalone "$2" "$4" "$5"; then
+        # shellcheck disable=SC2206
         moStandalone=( $moStandalone )
         echo -n "${2:0:${moStandalone[0]}}"
         moIndent=${2:${moStandalone[0]}}
@@ -846,11 +882,11 @@ moPartial() {
 # Returns nothing.
 moShow() {
     # Namespace these variables
-    local moJoined moNameParts
+    local moJoined moNameParts moContent
 
     if moIsFunction "$1"; then
-        CONTENT=$(moCallFunction "$1" "" "$3")
-        moParse "$CONTENT" "$2" false
+        moCallFunction moContent "$1" "" "$3"
+        moParse "$moContent" "$2" false
         return 0
     fi
 
@@ -925,6 +961,7 @@ moStandaloneAllowed() {
     local bytes
 
     if moIsStandalone bytes "$2" "$4" "$5"; then
+        # shellcheck disable=SC2206
         bytes=( $bytes )
         echo -n "${2:0:${bytes[0]}}"
         local "$1" && moIndirect "$1" "${4:${bytes[1]}}"
@@ -1052,13 +1089,13 @@ moTrimWhitespace() {
 moUsage() {
     grep '^#/' "${MO_ORIGINAL_COMMAND}" | cut -c 4-
     echo ""
-    set | grep ^MO_VERSION=
+    echo "MO_VERSION=$MO_VERSION"
 }
 
 
 # Save the original command's path for usage later
 MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)/${BASH_SOURCE[0]##*/}"
-MO_VERSION="2.1.0"
+MO_VERSION="2.2.0"
 
 # If sourced, load all functions.
 # If executed, perform the actions as expected.

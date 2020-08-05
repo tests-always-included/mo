@@ -10,11 +10,12 @@
 # diagnose what's not working and fix those low-level functions first.
 
 PARENT_PID=$$
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit 1
 rm -f diagnostic.test
 rm -f diagnostic.partial
 
 # Load mo's functions
+# shellcheck disable=SC1091
 . ./mo
 
 fail() {
@@ -75,21 +76,20 @@ echo "ok"
 
 echo -n "moIsArray ... "
 (
-    TEST=1
-    moIsArray TEST && fail "Wrongly said number was an array"
+    export TEST_NUM=1
+    moIsArray TEST_NUM && fail "Wrongly said number was an array"
 )
 (
-    TEST=()
-    moIsArray TEST || fail "Wrongly said array was not an array"
+    export TEST_ARR=()
+    moIsArray TEST_ARR || fail "Wrongly said array was not an array"
 )
 (
-    # shellcheck disable=SC2034
-    TEST=""
-    moIsArray TEST && fail "Wrongly said string was an array"
+    export TEST_EMPTY=""
+    moIsArray TEST_EMPTY && fail "Wrongly said string was an array"
 )
 (
-    unset TEST
-    moIsArray TEST && fail "Wrongly said undefined was an array"
+    unset TEST_UNSET
+    moIsArray TEST_UNSET && fail "Wrongly said undefined was an array"
 )
 echo "ok"
 
