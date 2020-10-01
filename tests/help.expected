@@ -14,14 +14,15 @@ Simple usage:
 Options:
 
    -u, --fail-not-set
-         - Fail upon expansion of an unset variable.
+         Fail upon expansion of an unset variable.
    -x, --fail-on-function
-         - Fail when a function returns a non-zero status code.
+         Fail when a function returns a non-zero status code.
    -e, --false
-         - Treat the string "false" as empty for conditionals.
+         Treat the string "false" as empty for conditionals.
    -h, --help
-         - This message.
+         This message.
    -s=FILE, --source=FILE
-         - Load FILE into the environment before processing templates.
+         Load FILE into the environment before processing templates.
+         Can be used multiple times.
 
 MO_VERSION=2.2.0

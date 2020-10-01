@@ -36,7 +36,7 @@ Display a help message.
 
       -s=FILE, --source=FILE
 
-Source a file into the environment before processing template files.
+Source a file into the environment before processing template files. This can be used multiple times.
 
       --
 
