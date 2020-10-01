@@ -25,6 +25,7 @@
 #/          This message.
 #/    -s=FILE, --source=FILE
 #/          Load FILE into the environment before processing templates.
+#/          Can be used multiple times.
 #
 # Mo is under a MIT style licence with an additional non-advertising clause.
 # See LICENSE.md for the full text.
@@ -71,6 +72,7 @@
 #     -s=FILE, --source=FILE
 #
 # Source a file into the environment before processing template files.
+# This can be used multiple times.
 #
 #     --
 #
