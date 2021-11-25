@@ -302,7 +302,7 @@ moFindEndTag() {
 moFindString() {
     local pos string
 
-    string=${2%%$3*}
+    string=${2%%"$3"*}
     [[ "$string" == "$2" ]] && pos=-1 || pos=${#string}
     local "$1" && moIndirect "$1" "$pos"
 }
