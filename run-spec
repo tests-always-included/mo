@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+# Create a package.json so the dependency package is installed in the local
+# directory
+echo '{"private":true, "dependencies":{"async": "*"}}' > package.json
+npm install
+
+# Install or update the specs
+if [[ ! -d spec ]]; then
+    git clone https://github.com/mustache/spec.git spec
+else
+    (
+        cd spec;
+        git pull
+    )
+fi
+
+# Actually run the specs
+node run-spec.js spec/specs/*.json
+
