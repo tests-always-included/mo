@@ -7,7 +7,7 @@ jobs:
     steps:
       - name: Check out code
         uses: actions/checkout@v1
-      - name: Npm install
-        run: npm run install-tests
-      - name: Execute test
-        run: npm run test
+      - name: Run tests
+        run: ./run-tests
+      - name: Run against spec
+        run: ./run-spec
