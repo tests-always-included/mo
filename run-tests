@@ -9,6 +9,8 @@ FAIL=0
 
 source ./run-basic-tests
 
+source ./run-meta-tests
+
 echo ""
 echo "Pass: $PASS"
 echo "Fail: $FAIL"

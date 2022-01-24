@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+cd "$(dirname "$0")" || exit 1
+
+for TEST in $(cat meta-tests.txt); do
+
+    echo -n "meta:$TEST ... "
+
+    (
+        meta-tests/${TEST}.sh > /dev/null 2> /dev/null
+    )
+
+    statusCode=$?
+
+    if [[ $statusCode -ne 0 ]]; then
+        echo "FAIL (status code $statusCode)"
+        FAIL=$(( FAIL + 1 ))
+    else
+        echo "ok"
+        PASS=$(( PASS + 1 ))
+    fi
+
+done
