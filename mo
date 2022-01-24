@@ -1095,6 +1095,54 @@ moUsage() {
 }
 
 
+# Produce a list of all shell function declared by mo, and brought
+# into any shell that had sourced the file. Each name is given on one
+# line of standard output.
+moListFuncs() {
+    cat <<EOF
+mo
+moCallFunction
+moFindEndTag
+moFindString
+moFullTagName
+moGetContent
+moIndentLines
+moIndirect
+moIndirectArray
+moIsArray
+moIsFunction
+moIsStandalone
+moJoin
+moLoadFile
+moLoop
+moParse
+moPartial
+moShow
+moSplit
+moStandaloneAllowed
+moStandaloneDenied
+moTest
+moTestVarSet
+moTrimChars
+moTrimWhitespace
+moUsage
+moListFuncs
+moListVars
+EOF
+}
+
+
+# Produce a list of all shell variables declared by mo, and brought
+# into any shell that had sourced the file. Each name is given on one
+# line of standard output.
+moListVars() {
+    cat <<EOF
+MO_ORIGINAL_COMMAND
+MO_VERSION
+EOF
+}
+
+
 # Save the original command's path for usage later
 MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)/${BASH_SOURCE[0]##*/}"
 MO_VERSION="2.2.0"
