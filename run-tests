@@ -38,7 +38,7 @@ for TEST in tests/*.expected; do
 done
 
 echo ""
-echo "Pass:  $PASS"
+echo "Pass: $PASS"
 echo "Fail: $FAIL"
 if [[ $FAIL -gt 0 ]]; then
     exit 1
