@@ -6,7 +6,7 @@ for TEST in tests/*.expected; do
     export BASE="${TEST%.expected}"
     export MO_FALSE_IS_EMPTY=
 
-    echo -n "$BASE ... "
+    echo -n "basic:${BASE#tests/} ... "
 
     (
         if [[ -f "${BASE}.sh" ]]; then
