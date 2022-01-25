@@ -3,3 +3,4 @@ subshell-simple
 subshell-undeclared
 subshell-source
 subshell-export
+function-list
