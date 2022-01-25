@@ -5,6 +5,7 @@ subshell-source
 subshell-clean
 subshell-clean-undeclared
 subshell-export
+subshell-unexport
 subshell-declare
 function-list
 function-unload
