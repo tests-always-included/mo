@@ -3,6 +3,7 @@ subshell-simple
 subshell-undeclared
 subshell-source
 subshell-clean
+subshell-clean-undeclared
 subshell-export
 subshell-declare
 function-list
