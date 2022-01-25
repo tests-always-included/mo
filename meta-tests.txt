@@ -9,6 +9,7 @@ subshell-export-nested
 subshell-unexport
 subshell-unexport-nested
 subshell-declare
+subshell-declare-nested
 function-list
 function-unload
 function-export
