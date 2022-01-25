@@ -1,4 +1,4 @@
-FROM alpine:3.13.4
+FROM alpine
 
 RUN apk add --no-cache bash
 ADD mo /usr/local/bin/mo
