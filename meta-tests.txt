@@ -5,3 +5,4 @@ subshell-source
 subshell-export
 function-list
 function-unload
+function-export
