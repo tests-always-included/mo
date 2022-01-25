@@ -1,4 +1,5 @@
 base
+subshell-usage
 subshell-simple
 subshell-undeclared
 subshell-source
