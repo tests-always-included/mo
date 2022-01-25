@@ -6,3 +6,4 @@ subshell-export
 function-list
 function-unload
 function-export
+function-unexport
