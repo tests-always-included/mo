@@ -4,3 +4,4 @@ subshell-undeclared
 subshell-source
 subshell-export
 function-list
+function-unload
