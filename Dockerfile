@@ -1,11 +1,7 @@
-FROM alpine:3.13.4
+FROM alpine
 
-COPY ./mo .
-RUN apk add --update bash && \
-    chmod +x mo &&\
-    mv mo /usr/local/bin/mo && \
-    rm -rf /var/cache/apk/*
+RUN apk add --no-cache bash
+ADD mo /usr/local/bin/mo
+RUN chmod +x /usr/local/bin/mo
 
-WORKDIR /opt
-
-ENTRYPOINT ["/usr/local/bin/mo"]
+ENTRYPOINT usr/local/bin/mo
