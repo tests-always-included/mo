@@ -769,9 +769,13 @@ moParse() {
                 moFullTagName moTag "$moCurrent" "$moTag"
                 moContent=${moContent[1]}
 
+                if [[ ! -z "$moCurrent" ]]; then
+                    moBlock=$(moShow "$moCurrent" "$moCurrent")
+                fi
+
                 # Now show the value
                 # Quote moArgs here, do not quote it later.
-                moShow "$moTag" "$moCurrent" "$moArgs"
+                moShow "$moTag" "$moCurrent" "$moArgs" "$moBlock"
                 ;;
 
             '&'*)
@@ -791,8 +795,12 @@ moParse() {
                 moArgs=${moArgs:${#moTag}}
                 moFullTagName moTag "$moCurrent" "$moTag"
 
+                if [[ ! -z "$moCurrent" ]]; then
+                    moBlock=$(moShow "$moCurrent" "$moCurrent")
+                fi
+
                 # Quote moArgs here, do not quote it later.
-                moShow "$moTag" "$moCurrent" "$moArgs"
+                moShow "$moTag" "$moCurrent" "$moArgs" "$moBlock"
                 ;;
         esac
 
@@ -880,6 +888,7 @@ moPartial() {
 # $1 - Name of environment variable or function
 # $2 - Current context
 # $3 - Arguments string if $1 is a function
+# $4 - Content string if $1 is a function
 #
 # Returns nothing.
 moShow() {
@@ -887,7 +896,7 @@ moShow() {
     local moJoined moNameParts moContent
 
     if moIsFunction "$1"; then
-        moCallFunction moContent "$1" "" "$3"
+        moCallFunction moContent "$1" "$4" "$3"
         moParse "$moContent" "$2" false
         return 0
     fi
