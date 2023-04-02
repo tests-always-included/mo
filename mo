@@ -170,7 +170,7 @@ mo() (
     fi
 
     moGetContent moContent "${files[@]}" || return 1
-    moParse "$moContent" "" true
+    moParse "$moContent" "" true ""
 )
 
 
@@ -179,26 +179,55 @@ mo() (
 # $1 - Variable for output
 # $2 - Function to call
 # $3 - Content to pass
-# $4 - Additional arguments as a single string
+# $4 - True if content is a context string
+# $5 - Additional arguments as a single string
 #
 # This can be dangerous, especially if you are using tags like
 # {{someFunction ; rm -rf / }}
 #
 # Returns nothing.
 moCallFunction() {
-    local moArgs moContent moFunctionArgs moFunctionResult
+    local moArgs moContent moBlock moLoopKeys moLoopValues moFunctionArgs moFunctionResult
 
     moArgs=()
-    moTrimWhitespace moFunctionArgs "$4"
+    moTrimWhitespace moFunctionArgs "$5"
 
     # shellcheck disable=SC2031
     if [[ -n "${MO_ALLOW_FUNCTION_ARGUMENTS-}" ]]; then
         # Intentionally bad behavior
         # shellcheck disable=SC2206
-        moArgs=($4)
+        moArgs=($5)
     fi
 
-    moContent=$(echo -n "$3" | MO_FUNCTION_ARGS="$moFunctionArgs" eval "$2" "${moArgs[@]}") || {
+    declare -a moLoopKeys moLoopValues
+
+    moBlock=$3
+    if [[ $4 == true ]]; then
+        local moFieldSep moKeySep
+        moKeySep=$(printf '\31')
+        moFieldSep=$(printf '\30')
+
+        local moFields
+        moFields=(${moBlock//$moFieldSep/ })
+        for f in "${moFields[@]}"; do
+            local moField
+            moField=(${f//$moKeySep/ })
+            moLoopKeys+=(${moField[0]})
+            moLoopValues+=(${moField[1]})
+        done;
+
+        moBlock=""
+        moArgs+=(${moLoopKeys[0]})
+        moArgs+=(${moLoopValues[0]})
+    fi
+
+    moContent=$(\
+        echo -n "$moBlock" | \
+        MO_LOOP_KEYS="${moLoopKeys[@]}" \
+        MO_LOOP="${moLoopValues[@]}" \
+        MO_FUNCTION_ARGS="$moFunctionArgs" \
+        eval "$2" "${moArgs[@]}"\
+    ) || {
         moFunctionResult=$?
         # shellcheck disable=SC2031
         if [[ -n "${MO_FAIL_ON_FUNCTION-}" && "$moFunctionResult" != 0 ]]; then
@@ -650,7 +679,7 @@ moLoop() {
 
     while [[ "${#@}" -gt 0 ]]; do
         moFullTagName context "$contextBase" "$1"
-        moParse "$content" "$context" false
+        moParse "$content" "$context" false ""
         shift
     done
 }
@@ -661,18 +690,21 @@ moLoop() {
 # $1 - Block of text to change
 # $2 - Current name (the variable NAME for what {{.}} means)
 # $3 - true when no content before this, false otherwise
+# $4 - Parent context, if any
 #
 # Returns nothing.
 moParse() {
     # Keep naming variables mo* here to not overwrite needed variables
     # used in the string replacements
-    local moArgs moBlock moContent moCurrent moIsBeginning moNextIsBeginning moTag
+    local moArgs moBlock moContent moContext moCurContext moCurrent moIsBeginning moNextIsBeginning moTag
+
+    # Find open tags
+    moSplit moContent "$1" '{{' '}}'
 
     moCurrent=$2
     moIsBeginning=$3
 
-    # Find open tags
-    moSplit moContent "$1" '{{' '}}'
+    moContext=$4
 
     while [[ "${#moContent[@]}" -gt 1 ]]; do
         moTrimWhitespace moTag "${moContent[1]}"
@@ -697,13 +729,23 @@ moParse() {
                 if moTest "$moTag"; then
                     # Show / loop / pass through function
                     if moIsFunction "$moTag"; then
-                        moCallFunction moContent "$moTag" "${moBlock[0]}" "$moArgs"
-                        moParse "$moContent" "$moCurrent" false
+                        moCallFunction moContent "$moTag" "${moBlock[0]}" false "$moArgs"
+                        moParse "$moContent" "$moCurrent" false "$moContext"
                         moContent="${moBlock[2]}"
                     elif moIsArray "$moTag"; then
-                        eval "moLoop \"\${moBlock[0]}\" \"$moTag\" \"\${!${moTag}[@]}\""
+                        local moFullKey moValue
+                        declare -a moKeys
+                        moKeys=($(eval "echo \"\${!${moTag}[@]}\""))
+                        for k in "${moKeys[@]}"; do
+                            moFullTagName moFullKey "$moTag" "$k"
+                            moValue=$(moShow "$moFullKey" "$moFullKey")
+                            moCurContext=$(moAppendContext "$moContext" "$k" "$moValue")
+
+                            moParse "${moBlock[0]}" "$moFullKey" false "$moCurContext"
+                        done;
+                        #eval "moLoop \"\${moBlock[0]}\" \"$moTag\" \"\${!${moTag}[@]}\""
                     else
-                        moParse "${moBlock[0]}" "$moCurrent" true
+                        moParse "${moBlock[0]}" "$moCurrent" true "$moContext"
                     fi
                 fi
 
@@ -731,7 +773,7 @@ moParse() {
                 moFullTagName moTag "$moCurrent" "$moTag"
 
                 if ! moTest "$moTag"; then
-                    moParse "${moBlock[0]}" "$moCurrent" false "$moCurrent"
+                    moParse "${moBlock[0]}" "$moCurrent" false "$moContext"
                 fi
 
                 moContent="${moBlock[2]}"
@@ -769,13 +811,15 @@ moParse() {
                 moFullTagName moTag "$moCurrent" "$moTag"
                 moContent=${moContent[1]}
 
+                moCurContext="$moContext"
                 if [[ ! -z "$moCurrent" ]]; then
                     moBlock=$(moShow "$moCurrent" "$moCurrent")
+                    moCurContext=$(moAppendContext "$moContext" "$k" "$moValue")
                 fi
 
                 # Now show the value
                 # Quote moArgs here, do not quote it later.
-                moShow "$moTag" "$moCurrent" "$moArgs" "$moBlock"
+                moShow "$moTag" "$moCurrent" "$moArgs" "$moCurContext"
                 ;;
 
             '&'*)
@@ -795,12 +839,14 @@ moParse() {
                 moArgs=${moArgs:${#moTag}}
                 moFullTagName moTag "$moCurrent" "$moTag"
 
+                moCurContext="$moContext"
                 if [[ ! -z "$moCurrent" ]]; then
                     moBlock=$(moShow "$moCurrent" "$moCurrent")
+                    moCurContext=$(moAppendContext "$moContext" "$k" "$moValue")
                 fi
 
                 # Quote moArgs here, do not quote it later.
-                moShow "$moTag" "$moCurrent" "$moArgs" "$moBlock"
+                moShow "$moTag" "$moCurrent" "$moArgs" "$moCurContext"
                 ;;
         esac
 
@@ -860,7 +906,7 @@ moPartial() {
         cd "$(dirname -- "$moFilename")" || exit 1
         moUnindented="$(
             moLoadFile moPartial "${moFilename##*/}" || exit 1
-            moParse "${moPartial}" "$6" true
+            moParse "${moPartial}" "$6" true ""
 
             # Fix bash handling of subshells and keep trailing whitespace.
             # This is removed in moIndentLines.
@@ -880,6 +926,30 @@ moPartial() {
 }
 
 
+# Internal: Add a Key and Value to the current context
+#
+# Prefix all variables
+#
+# $1   - Current context
+# $2   - Key name
+# $3-@ - Value
+#
+# Echoes new context
+moAppendContext() {
+    local moContext moKey moValue moFieldSep moKeySep
+    moKeySep=$(printf '\31')
+    moFieldSep=$(printf '\30')
+
+    moContext="$1"
+    moKey="$2"
+    shift 2
+
+    moValue="$@"
+
+    echo "$moKey$moKeySep$moValue$moFieldSep$moContext"
+}
+
+
 # Internal: Show an environment variable or the output of a function to
 # stdout.
 #
@@ -893,11 +963,11 @@ moPartial() {
 # Returns nothing.
 moShow() {
     # Namespace these variables
-    local moJoined moNameParts moContent
+    local moJoined moNameParts moContent moContext
 
     if moIsFunction "$1"; then
-        moCallFunction moContent "$1" "$4" "$3"
-        moParse "$moContent" "$2" false
+        moCallFunction moContent "$1" "$4" true "$3"
+        moParse "$moContent" "$2" false "$moContext"
         return 0
     fi
 
@@ -921,7 +991,6 @@ moShow() {
         eval "echo -n \"\${${moNameParts[0]}[${moNameParts[1]%%.*}]}\""
     fi
 }
-
 
 # Internal: Split a larger string into an array.
 #

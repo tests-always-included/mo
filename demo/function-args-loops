@@ -3,35 +3,37 @@
 
 cd "$(dirname "$0")" # Go to the script's directory
 
-# The links are associative arrays
-declare -a links
-declare -A names urls
+MO_ALLOW_FUNCTION_ARGUMENTS=true
 
-links+=(resque)
+# The links are associative arrays
+#declare -a links
+declare -A names urls links pewpew
+
+pewpew[test1]=test1.1
+pewpew[test2]=test2.2
+pewpew[test3]=test3.3
+
+links[foo]=resque
 names[resque]=Resque
 urls[resque]=http://example.com/resque
 
-links+=(hub)
+links[bar]=hub
 names[hub]=Hub
 urls[hub]=http://example.com/hub
 
-links+=(rip)
+links[quux]=rip
 names[rip]=Rip
 urls[rip]=http://example.com/rip
 
 # helper functions
 link_name() {
-    # Trying to use unique names
-    local key
-    key=$(cat)
-    echo ${names[$key]}
+    echo "$@" >&2
+    echo ${names[$3]}
 }
 
 link_url() {
-    # Trying to use unique names
-    local key
-    key=$(cat)
-    echo ${urls[$key]}
+    echo "$@" >&2
+    echo ${urls[$2]}
 }
 
 
@@ -41,8 +43,8 @@ link_url() {
 # Process the template
 cat <<EOF | mo --allow-function-arguments
 Here are your links:
-{{#links}}
- * [{{link_name}}]({{link_url}})
-{{/links}}
+{{#pewpew}}{{#links}}
+ * [{{link_name test}}]({{link_url}})
+{{/links}}{{/pewpew}}
 
 EOF
