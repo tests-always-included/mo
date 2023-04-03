@@ -497,6 +497,20 @@ moExpandAssoc() {
     done
 }
 
+
+# Internal: Cleans the values from a previous expanded assoc
+#
+# $1 - Array name
+#
+# Returns nothing.
+moCleanExpanded() {
+    local moKeys moValue moValueArr
+    moKeys=($(eval 'echo "${!'$1'[@]}"'))
+    for k in "${moKeys[@]}"; do
+        unset -v "$k"
+    done
+}
+
 # Internal: Scans a string to determine if all elements are declared arrays
 #
 # $1-@ - Array elements
@@ -818,6 +832,8 @@ moParse() {
                             moCurContext=$(moAppendContext "$moContext" "$k" "$moValue")
 
                             moParse "${moBlock[0]}" "$moFullKey" false "$moCurContext"
+
+                            moCleanExpanded "$moValue"
                         done;
                     else
                         moParse "${moBlock[0]}" "$moCurrent" true "$moContext"
