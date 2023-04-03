@@ -1,8 +1,10 @@
-No args: [test1 - ] - done
-One arg: [test1 - one] - done
-Multiple arguments: [test1 - aa bb cc 'x' " ! {[_.|] - done
-Evil: [test1 - bla; cat /etc/issue] - done
-No args: [test2 - ] - done
-One arg: [test2 - one] - done
-Multiple arguments: [test2 - aa bb cc 'x' " ! {[_.|] - done
-Evil: [test2 - bla; cat /etc/issue] - done
+
+No args: 0: foo2 [ 0 foo2] - done
+One arg: 0: foo2 [one 0 foo2] - done
+Multiple arguments: 0: foo2 [aa bb cc 'x' " ! {[_.| 0 foo2] - done
+Evil: 0: foo2 [bla; cat /etc/issue 0 foo2] - done
+
+No args: 1: bar2 [ 1 bar2] - done
+One arg: 1: bar2 [one 1 bar2] - done
+Multiple arguments: 1: bar2 [aa bb cc 'x' " ! {[_.| 1 bar2] - done
+Evil: 1: bar2 [bla; cat /etc/issue 1 bar2] - done

@@ -187,19 +187,12 @@ mo() (
 #
 # Returns nothing.
 moCallFunction() {
-    local moArgs moContent moBlock moLoopKeys moLoopValues moFunctionArgs moFunctionResult
+    local moArgs moContent moBlock moFunctionResult
+    local MO_LOOP_KEYS MO_LOOP MO_FUNCTION_ARGS
 
     moArgs=()
-    moTrimWhitespace moFunctionArgs "$5"
-
-    # shellcheck disable=SC2031
-    if [[ -n "${MO_ALLOW_FUNCTION_ARGUMENTS-}" ]]; then
-        # Intentionally bad behavior
-        # shellcheck disable=SC2206
-        moArgs=($5)
-    fi
-
-    declare -a moLoopKeys moLoopValues
+    moTrimWhitespace MO_FUNCTION_ARGS "$5"
+    declare -a MO_LOOP_KEYS MO_LOOP
 
     moBlock=$3
     if [[ $4 == true ]]; then
@@ -212,22 +205,24 @@ moCallFunction() {
         for f in "${moFields[@]}"; do
             local moField
             moField=(${f//$moKeySep/ })
-            moLoopKeys+=(${moField[0]})
-            moLoopValues+=(${moField[1]})
+            MO_LOOP_KEYS+=(${moField[0]})
+            MO_LOOP+=(${moField[1]})
         done;
 
         moBlock=""
-        moArgs+=(${moLoopKeys[0]})
-        moArgs+=(${moLoopValues[0]})
     fi
 
-    moContent=$(\
-        echo -n "$moBlock" | \
-        MO_LOOP_KEYS="${moLoopKeys[@]}" \
-        MO_LOOP="${moLoopValues[@]}" \
-        MO_FUNCTION_ARGS="$moFunctionArgs" \
-        eval "$2" "${moArgs[@]}"\
-    ) || {
+
+    # shellcheck disable=SC2031
+    if [[ -n "${MO_ALLOW_FUNCTION_ARGUMENTS-}" ]]; then
+        # Intentionally bad behavior
+        # shellcheck disable=SC2206
+        moArgs=($5)
+        moArgs+=(${MO_LOOP_KEYS[0]})
+        moArgs+=(${MO_LOOP[0]})
+    fi
+
+    moContent=$(echo -n "$moBlock" | eval "$2" "${moArgs[@]}") || {
         moFunctionResult=$?
         # shellcheck disable=SC2031
         if [[ -n "${MO_FAIL_ON_FUNCTION-}" && "$moFunctionResult" != 0 ]]; then
@@ -345,7 +340,13 @@ moFindString() {
 #
 # Returns nothing.
 moFullTagName() {
-    if [[ -z "${2-}" ]] || [[ "$2" == *.* ]]; then
+    if [[ "$3" =~ "[\$]" ]] && [[ "$2" == *.* ]]; then
+        local "$1" && moIndirect "$1" "${3%\[*}.${2#*.}"
+    elif [[ "$3" =~ "[.]" ]] && [[ "$2" == *.* ]]; then
+        local moValue
+        moValue=$(moShow "$2" "$2")
+        local "$1" && moIndirect "$1" "${3%\[*}.$moValue"
+    elif [[ -z "${2-}" ]] || [[ "$2" == *.* ]]; then
         local "$1" && moIndirect "$1" "$3"
     else
         local "$1" && moIndirect "$1" "${2}.${3}"
@@ -473,6 +474,44 @@ moIndirect() {
 }
 
 
+# Internal: Expand an array to local variables
+#
+# $1 - Array name
+#
+# If an associative array's key is also declared an array
+# then its value will be treated as an array
+#
+# Returns nothing.
+moExpandAssoc() {
+    local moKeys moValue moValueArr
+    moKeys=($(eval 'echo "${!'$1'[@]}"'))
+    for k in "${moKeys[@]}"; do
+        if moIsArray "$k"; then
+        #if moIsArrayList "${moValueArr[@]}"; then
+            moValueArr=($(eval 'echo "${'$1'['$k']}"'))
+            eval "$k=(${moValueArr[@]})"
+        else
+            moValue=$(eval 'echo "${'$1'['$k']}"')
+            local "$k" && moIndirect "$k" "$moValue"
+        fi
+    done
+}
+
+# Internal: Scans a string to determine if all elements are declared arrays
+#
+# $1-@ - Array elements
+#
+# Returns 0 if all elements match, otherwise Returns 1
+moIsArrayList() {
+    for var in "$@"; do
+        if ! moIsArray "$var"; then
+            return 1
+        fi
+    done;
+    return 0
+}
+
+
 # Internal: Send an array as a variable up to caller of a function
 #
 # $1   - Variable name
@@ -523,6 +562,36 @@ moIsArray() {
 
     moTestResult=$(declare -p "$1" 2>/dev/null) || return 1
     [[ "${moTestResult:0:10}" == "declare -a" ]] && return 0
+    [[ "${moTestResult:0:10}" == "declare -A" ]] && return 0
+
+    return 1
+}
+
+
+# Internal: Determine if a given environment variable exists and if it is
+# an associative array.
+#
+# $1 - Name of environment variable
+#
+# Be extremely careful.  Even if strict mode is enabled, it is not honored
+# in newer versions of Bash.  Any errors that crop up here will not be
+# caught automatically.
+#
+# Examples
+#
+#   declare -A var
+#   var[foo]="bar"
+#   if moIsArray var; then
+#      echo "This is an array"
+#      echo "Make sure you don't accidentally use \$var"
+#   fi
+#
+# Returns 0 if the name is not empty, 1 otherwise.
+moIsAssocArray() {
+    # Namespace this variable so we don't conflict with what we're testing.
+    local moTestResult
+
+    moTestResult=$(declare -p "$1" 2>/dev/null) || return 1
     [[ "${moTestResult:0:10}" == "declare -A" ]] && return 0
 
     return 1
@@ -734,16 +803,22 @@ moParse() {
                         moContent="${moBlock[2]}"
                     elif moIsArray "$moTag"; then
                         local moFullKey moValue
+
                         declare -a moKeys
                         moKeys=($(eval "echo \"\${!${moTag}[@]}\""))
+
                         for k in "${moKeys[@]}"; do
                             moFullTagName moFullKey "$moTag" "$k"
                             moValue=$(moShow "$moFullKey" "$moFullKey")
+
+                            if moIsAssocArray "$moValue"; then
+                                moExpandAssoc "$moValue"
+                            fi
+
                             moCurContext=$(moAppendContext "$moContext" "$k" "$moValue")
 
                             moParse "${moBlock[0]}" "$moFullKey" false "$moCurContext"
                         done;
-                        #eval "moLoop \"\${moBlock[0]}\" \"$moTag\" \"\${!${moTag}[@]}\""
                     else
                         moParse "${moBlock[0]}" "$moCurrent" true "$moContext"
                     fi
@@ -791,6 +866,16 @@ moParse() {
                 moShow "$moCurrent" "$moCurrent"
                 ;;
 
+            '$')
+                moStandaloneDenied moContent "${moContent[@]}"
+                # Current content (environment variable or function)
+                if [[ "$moCurrent" == *.* ]]; then
+                    echo -n "${moCurrent#*.}"
+                else
+                    echo -n "$moCurrent"
+                fi
+                ;;
+
             '=')
                 # Change delimiters
                 # Any two non-whitespace sequences separated by whitespace.
@@ -811,15 +896,9 @@ moParse() {
                 moFullTagName moTag "$moCurrent" "$moTag"
                 moContent=${moContent[1]}
 
-                moCurContext="$moContext"
-                if [[ ! -z "$moCurrent" ]]; then
-                    moBlock=$(moShow "$moCurrent" "$moCurrent")
-                    moCurContext=$(moAppendContext "$moContext" "$k" "$moValue")
-                fi
-
                 # Now show the value
                 # Quote moArgs here, do not quote it later.
-                moShow "$moTag" "$moCurrent" "$moArgs" "$moCurContext"
+                moShow "$moTag" "$moCurrent" "$moArgs" "$moContext"
                 ;;
 
             '&'*)
@@ -839,14 +918,8 @@ moParse() {
                 moArgs=${moArgs:${#moTag}}
                 moFullTagName moTag "$moCurrent" "$moTag"
 
-                moCurContext="$moContext"
-                if [[ ! -z "$moCurrent" ]]; then
-                    moBlock=$(moShow "$moCurrent" "$moCurrent")
-                    moCurContext=$(moAppendContext "$moContext" "$k" "$moValue")
-                fi
-
                 # Quote moArgs here, do not quote it later.
-                moShow "$moTag" "$moCurrent" "$moArgs" "$moCurContext"
+                moShow "$moTag" "$moCurrent" "$moArgs" "$moContext"
                 ;;
         esac
 
@@ -991,6 +1064,7 @@ moShow() {
         eval "echo -n \"\${${moNameParts[0]}[${moNameParts[1]%%.*}]}\""
     fi
 }
+
 
 # Internal: Split a larger string into an array.
 #

@@ -1,6 +1,8 @@
-{{#arr}}
-No args: [{{testArgs}}] - done
-One arg: [{{testArgs one}}] - done
-Multiple arguments: [{{testArgs aa bb cc 'x' " ! {[_.| }}] - done
-Evil: [{{testArgs bla; cat /etc/issue}}] - done
-{{/arr}}
+{{#arr1}}
+{{#arr2}}
+No args: {{$}}: {{.}} [{{testArgs}}] - done
+One arg: {{$}}: {{.}} [{{testArgs one}}] - done
+Multiple arguments: {{$}}: {{.}} [{{testArgs aa bb cc 'x' " ! {[_.| }}] - done
+Evil: {{$}}: {{.}} [{{testArgs bla; cat /etc/issue}}] - done
+{{/arr2}}
+{{/arr1}}

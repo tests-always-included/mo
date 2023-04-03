@@ -1,0 +1,28 @@
+#!/bin/bash
+
+cd "$(dirname "$0")" # Go to the script's directory
+
+declare -A DATA OTHER_DATA NUM_DATA
+DATA=([one]=111 [two]=222)
+
+# Lookup another array using same keys
+OTHER_DATA=([one]="!!!" [two]="@@@")
+
+# Lookup another array using value as key
+NUM_DATA=([111]="One" [222]="Two")
+
+. ../mo
+
+cat <<EOF | mo
+Accessing data directly:
+    DATA: {{DATA}}
+    One: {{DATA.one}}
+    Two: {{DATA.two}}
+
+Things in DATA:
+{{#DATA}}
+    DATA: {{$}}: {{.}}
+    OTHER_DATA: {{$}}: {{OTHER_DATA[$]}}
+    NUM_DATA: {{.}}: {{NUM_DATA[.]}}
+{{/DATA}}
+EOF

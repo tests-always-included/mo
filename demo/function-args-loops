@@ -1,50 +1,34 @@
 #!/usr/bin/env bash
-# Example for how #54 can get implemented.
+#
+# This shows the key and value of an array element being appended
+# to a function call's arguments list
 
 cd "$(dirname "$0")" # Go to the script's directory
 
-MO_ALLOW_FUNCTION_ARGUMENTS=true
-
-# The links are associative arrays
-#declare -a links
-declare -A names urls links pewpew
-
-pewpew[test1]=test1.1
-pewpew[test2]=test2.2
-pewpew[test3]=test3.3
-
-links[foo]=resque
-names[resque]=Resque
-urls[resque]=http://example.com/resque
-
-links[bar]=hub
-names[hub]=Hub
-urls[hub]=http://example.com/hub
-
-links[quux]=rip
-names[rip]=Rip
-urls[rip]=http://example.com/rip
-
-# helper functions
-link_name() {
-    echo "$@" >&2
-    echo ${names[$3]}
-}
-
-link_url() {
-    echo "$@" >&2
-    echo ${urls[$2]}
-}
-
-
-# Source mo in order to work with arrays
+declare -A DATA
+DATA=([one]=111 [two]=222)
 . ../mo
 
-# Process the template
-cat <<EOF | mo --allow-function-arguments
-Here are your links:
-{{#pewpew}}{{#links}}
- * [{{link_name test}}]({{link_url}})
-{{/links}}{{/pewpew}}
+declare -a OTHER_DATA
+OTHER_DATA=(foo bar)
 
+LIST_ITEM() {
+    echo "- $1: $2"
+}
+
+SPECIAL_LIST_ITEM() {
+    echo "- [$1](./?item=$2): $3"
+}
+
+cat <<EOF | mo --allow-function-arguments
+Accessing data directly:
+    DATA: {{DATA}}
+    One: {{DATA.one}}
+    Two: {{DATA.two}}
+
+Things in DATA:
+{{#DATA}}
+    {{LIST_ITEM}}
+    {{SPECIAL_LIST_ITEM Click}}
+{{/DATA}}
 EOF

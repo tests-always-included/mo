@@ -14,6 +14,6 @@ Accessing data directly:
 
 Things in DATA:
 {{#DATA}}
-    Item: {{.}}
+    {{$}}: {{.}}
 {{/DATA}}
 EOF

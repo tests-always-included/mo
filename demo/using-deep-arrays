@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+# Example for how #54 can get implemented.
+
+cd "$(dirname "$0")" # Go to the script's directory
+
+MO_ALLOW_FUNCTION_ARGUMENTS=true
+
+# The links are associative arrays
+declare -a sections
+declare -A homeSection otherSection
+declare -A resqueLink hubLink ripLink
+
+resqueLink[title]="Resque"
+resqueLink[url]="http://example.com/resque"
+
+hubLink[title]="Hub"
+hubLink[url]="http://example.com/hub"
+
+ripLink[title]="Rip"
+ripLink[url]="http://example.com/rip"
+
+# By declaring `links` as an array
+# the `links` sub-elements will be
+# treated as arrays instead of strings
+declare -a links
+homeSection[name]="Home Section"
+homeSection[links]="resqueLink hubLink"
+
+otherSection[name]="Other Section"
+otherSection[links]="ripLink"
+
+sections=(homeSection otherSection)
+
+# Source mo in order to work with arrays
+. ../mo
+
+# Process the template
+cat <<EOF | mo --allow-function-arguments
+{{#sections}}
+# {{name}}
+
+{{links}}
+
+{{#links}}
+- [{{title}}]({{url}})
+{{/links}}
+
+{{/sections}}
+
+EOF
