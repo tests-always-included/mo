@@ -41,7 +41,7 @@ There are a few ways you can install this tool.  How you install it depends on h
 You can install this file in `/usr/local/bin/` or `/usr/bin/` by simply downloading it, changing the permissions, then moving it to the right location.  Double check that your system's PATH includes the destination folder, otherwise users may have a hard time starting the command.
 
     # Download
-    curl -sSL https://git.io/get-mo -o mo
+    curl -sSL https://raw.githubusercontent.com/tests-always-included/mo/master/mo -o mo
 
     # Make executable
     chmod +x mo
@@ -58,7 +58,7 @@ You can install this file in `/usr/local/bin/` or `/usr/bin/` by simply download
 This is very similar to installing it globally but it does not require root privileges.  It is very important that your PATH includes the destination folder otherwise it won't work.  Some local folders that are typically used are `~/bin/` and `~/.local/bin/`.
 
     # Download
-    curl -sSL https://git.io/get-mo -o mo
+    curl -sSL https://raw.githubusercontent.com/tests-always-included/mo/master/mo -o mo
 
     # Make executable
     chmod +x mo
@@ -78,7 +78,7 @@ This is very similar to installing it globally but it does not require root priv
 Bash scripts can source `mo` to include the functionality in their own routines.  This usage typically would have `mo` saved to a `lib/` folder in an application and your other scripts would use `. lib/mo` to bring it into your project.
 
     # Download
-    curl -sSL https://git.io/get-mo -o mo
+    curl -sSL https://raw.githubusercontent.com/tests-always-included/mo/master/mo -o mo
 
     # Move into your project folder
     mv mo ~/projects/amazing-things/lib/
