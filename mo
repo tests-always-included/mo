@@ -444,6 +444,38 @@ moIndirect() {
 }
 
 
+# Internal: Expand an array to local variables
+#
+# $1 - Array name
+#
+# If an associative array's key is also declared an array
+# then its value will be treated as an array
+#
+# Returns nothing.
+moExpandAssoc() {
+    local moKeys moValue moValueArr
+    moKeys=($(eval 'echo "${!'$1'[@]}"'))
+    for k in "${moKeys[@]}"; do
+        moValue=$(eval 'echo "${'$1'['$k']}"')
+        local "$k" && moIndirect "$k" "$moValue"
+    done
+}
+
+
+# Internal: Cleans the values from a previous expanded assoc
+#
+# $1 - Array name
+#
+# Returns nothing.
+moCleanExpanded() {
+    local moKeys moValue moValueArr
+    moKeys=($(eval 'echo "${!'$1'[@]}"'))
+    for k in "${moKeys[@]}"; do
+        unset -v "$k"
+    done
+}
+
+
 # Internal: Send an array as a variable up to caller of a function
 #
 # $1   - Variable name
@@ -494,6 +526,36 @@ moIsArray() {
 
     moTestResult=$(declare -p "$1" 2>/dev/null) || return 1
     [[ "${moTestResult:0:10}" == "declare -a" ]] && return 0
+    [[ "${moTestResult:0:10}" == "declare -A" ]] && return 0
+
+    return 1
+}
+
+
+# Internal: Determine if a given environment variable exists and if it is
+# an associative array.
+#
+# $1 - Name of environment variable
+#
+# Be extremely careful.  Even if strict mode is enabled, it is not honored
+# in newer versions of Bash.  Any errors that crop up here will not be
+# caught automatically.
+#
+# Examples
+#
+#   declare -A var
+#   var[foo]="bar"
+#   if moIsArray var; then
+#      echo "This is an array"
+#      echo "Make sure you don't accidentally use \$var"
+#   fi
+#
+# Returns 0 if the name is not empty, 1 otherwise.
+moIsAssocArray() {
+    # Namespace this variable so we don't conflict with what we're testing.
+    local moTestResult
+
+    moTestResult=$(declare -p "$1" 2>/dev/null) || return 1
     [[ "${moTestResult:0:10}" == "declare -A" ]] && return 0
 
     return 1
@@ -634,25 +696,33 @@ moLoadFile() {
 
 
 # Internal: Process a chunk of content some number of times.  Writes output
-# to stdout.
+# to stdout.  Extracts associative arrays to scope before processing.
 #
-# $1   - Content to parse repeatedly
-# $2   - Tag prefix (context name)
-# $3-@ - Names to insert into the parsed content
+# $1   - Name of current array
+# $2   - Current block
 #
 # Returns nothing.
 moLoop() {
-    local content context contextBase
+    local moFullKey moValue moKeys moTag
 
-    content=$1
-    contextBase=$2
-    shift 2
+    moTag=$1
+    moBlock=$2
 
-    while [[ "${#@}" -gt 0 ]]; do
-        moFullTagName context "$contextBase" "$1"
-        moParse "$content" "$context" false
-        shift
-    done
+    declare -a moKeys
+    moKeys=($(eval "echo \"\${!${moTag}[@]}\""))
+
+    for k in "${moKeys[@]}"; do
+        moFullTagName moFullKey "$moTag" "$k"
+        moValue=$(moShow "$moFullKey" "$moFullKey")
+
+        if moIsAssocArray "$moValue"; then
+            moExpandAssoc "$moValue"
+            moParse "$moBlock" "$moFullKey" false
+            moCleanExpanded "$moValue"
+        else
+            moParse "$moBlock" "$moFullKey" false
+        fi
+    done;
 }
 
 
@@ -701,7 +771,7 @@ moParse() {
                         moParse "$moContent" "$moCurrent" false
                         moContent="${moBlock[2]}"
                     elif moIsArray "$moTag"; then
-                        eval "moLoop \"\${moBlock[0]}\" \"$moTag\" \"\${!${moTag}[@]}\""
+                        moLoop "$moTag" "${moBlock[0]}"
                     else
                         moParse "${moBlock[0]}" "$moCurrent" true
                     fi

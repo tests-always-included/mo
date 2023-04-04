@@ -1,0 +1,10 @@
+# Links
+{{#navItems}}
+- [{{title}}]({{url}})
+{{/navItems}}
+
+# Standard List
+{{#stringArray}}
+- {{.}}
+{{/stringArray}}
+
