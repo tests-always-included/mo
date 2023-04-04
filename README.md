@@ -91,7 +91,7 @@ How to Use
 
 If you only plan using strings and numbers, nothing could be simpler.  In your shell script you can choose to export the variables.  The below script is [`demo/using-strings`](demo/using-strings).
 
-    #!/bin/bash
+    #!/usr/bin/env bash
     cd "$(dirname "$0")" # Go to the script's directory
     export TEST="This is a test"
     echo "Your message:  {{TEST}}" | ../mo
@@ -100,7 +100,7 @@ The result?  "Your message:  This is a test".
 
 Using arrays adds a slight level of complexity.  *You must source `mo`.*  Look at [`demo/using-arrays`](demo/using-arrays).
 
-    #!/bin/bash
+    #!/usr/bin/env bash
     cd "$(dirname "$0")" # Go to the script's directory
     export ARRAY=( one two "three three three" four five )
     . ../mo # This loads the "mo" function

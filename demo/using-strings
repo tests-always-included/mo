@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # This example does not source `mo` and is intentionally restricted to
 # variables that are not arrays.
