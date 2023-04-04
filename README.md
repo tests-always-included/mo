@@ -118,6 +118,46 @@ There are more scripts available in the [demos directory](demo/) that could help
 There are additional features that the program supports. Try using `mo --help` to see what is available.
 
 
+Enhancements
+-----------
+
+In addition to many of the features built-in to Mustache, `mo` includes a number of unique features that make it a bit more powerful.
+
+### Loop @key
+
+`mo` implements Handlebar's `@key` references for outputting the key inside of a loop:
+
+Env:
+```bash
+myarr=( foo bar )
+
+# Bash v4+
+declare -A myassoc
+myassoc[hello]="mo"
+myassoc[world]="is great"
+```
+
+Template:
+```handlebars
+{{#myarr}}
+ - {{@key}} {{.}}
+{{/myarr}}
+
+{{#myassoc}}
+ * {{@key}} {{.}}
+{{/myassoc}}
+```
+
+Output:
+```markdown
+ - 0 foo
+ - 1 bar
+
+ * hello mo
+ * world is great
+```
+
+
 Concessions
 -----------
 

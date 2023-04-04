@@ -666,7 +666,7 @@ moLoop() {
 moParse() {
     # Keep naming variables mo* here to not overwrite needed variables
     # used in the string replacements
-    local moArgs moBlock moContent moCurrent moIsBeginning moNextIsBeginning moTag
+    local moArgs moBlock moContent moCurrent moIsBeginning moNextIsBeginning moTag moKey
 
     moCurrent=$2
     moIsBeginning=$3
@@ -780,6 +780,17 @@ moParse() {
                 moTrimWhitespace moTag "${moTag:1}"
                 moFullTagName moTag "$moCurrent" "$moTag"
                 moShow "$moTag" "$moCurrent"
+                ;;
+
+            '@key')
+                # Special vars
+                moStandaloneDenied moContent "${moContent[@]}"
+                # Current content (environment variable or function)
+                if [[ "$moCurrent" == *.* ]]; then
+                    echo -n "${moCurrent#*.}"
+                else
+                    echo -n "$moCurrent"
+                fi
                 ;;
 
             *)
