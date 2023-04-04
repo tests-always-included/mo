@@ -64,7 +64,7 @@ function runTest(test, done) {
     var output, partials, script;
 
     script = [
-        '#!/bin/bash'
+        '#!/usr/bin/env bash'
     ];
     partials = test.partials || {};
 

@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # This requires tomdoc.sh to be in your PATH.
 # https://github.com/tests-always-included/tomdoc.sh

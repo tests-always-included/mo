@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # This sources a simple script with the env. variables needed for the template.
 

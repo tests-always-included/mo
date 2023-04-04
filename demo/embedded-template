@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 #
 # This embeds a template in the script without using strange `cat` syntax.
 

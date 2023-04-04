@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 cd "$(dirname "$0")" # Go to the script's directory
 export ARRAY=( one two "three three three" four five )
 . ../mo
