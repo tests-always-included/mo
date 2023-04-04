@@ -1095,9 +1095,111 @@ moUsage() {
 }
 
 
+# Produce a list of all shell function declared by mo, and brought
+# into any shell that had sourced the file. Each name is given on one
+# line of standard output.
+moListFuncs() {
+    cat <<EOF
+mo
+moCallFunction
+moFindEndTag
+moFindString
+moFullTagName
+moGetContent
+moIndentLines
+moIndirect
+moIndirectArray
+moIsArray
+moIsFunction
+moIsStandalone
+moJoin
+moLoadFile
+moLoop
+moParse
+moPartial
+moShow
+moSplit
+moStandaloneAllowed
+moStandaloneDenied
+moTest
+moTestVarSet
+moTrimChars
+moTrimWhitespace
+moUsage
+moListFuncs
+moListVars
+moUnload
+moExport
+moUnexport
+moDeclare
+EOF
+}
+
+
+# Produce a list of all shell variables declared by mo, and brought
+# into any shell that had sourced the file. Each name is given on one
+# line of standard output.
+moListVars() {
+    cat <<EOF
+MO_ORIGINAL_COMMAND
+MO_VERSION
+MO_EXPORT
+EOF
+}
+
+
+# Clear all shell functions and variables for names used by mo,
+# restoring the shell to a state as though mo had never been sourced
+# (assuming no naming collisions).
+moUnload() {
+    unset -v $(moListVars)
+    unset -f $(moListFuncs)
+}
+
+
+# Mark for export all shell functions and variables used by mo, such
+# that any child (or descendant) Bash process may call mo as though
+# itself having sourced the file.
+moExport() {
+    export $(moListVars)
+    export -f $(moListFuncs)
+    MO_EXPORT=1
+}
+
+
+# Unmark for export all shell functions and variables used by, such
+# that any new child (or descendant) Bash process would not inherit
+# them, regardless of any past operations.
+moUnexport() {
+    export -n $(moListVars)
+    export -fn $(moListFuncs)
+    MO_EXPORT=
+}
+
+
+# Print declaration of all shell functions and variables used by mo,
+# suitable for processing by another Bash shell. Any Bash instance
+# processing the output of this function may afterward call mo as
+# though itself having sourced the file.
+moDeclare() {
+    local functions="$(moListFuncs)"
+    if ! [ -z "${functions}" ]; then
+        declare -fp ${functions}
+    fi
+    local vars="$(moListVars)"
+    if ! [ -z "${vars}" ]; then
+        declare -p ${vars}
+    fi
+    if ! [ -z "${MO_EXPORT}" ]; then
+        echo moExport
+    fi
+}
+
+
 # Save the original command's path for usage later
 MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)/${BASH_SOURCE[0]##*/}"
 MO_VERSION="2.2.0"
+MO_EXPORT=
 
 # If sourced, load all functions.
 # If executed, perform the actions as expected.

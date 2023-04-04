@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+cd "$(dirname "$0")" || exit 1
+
+for TEST in tests/*.expected; do
+    export BASE="${TEST%.expected}"
+    export MO_FALSE_IS_EMPTY=
+
+    echo -n "basic:${BASE#tests/} ... "
+
+    (
+        if [[ -f "${BASE}.sh" ]]; then
+            # Run a shell script if one exists
+            "${BASE}.sh"
+        else
+            # Fall back to using .env and .template
+            # shellcheck disable=SC1090
+            . "${BASE}.env"
+            echo "Do not read this input" | mo "${BASE}.template"
+        fi
+    ) | diff -U5 - "${TEST}" > "${BASE}.diff"
+
+    statusCode=$?
+
+    if [[ $statusCode -ne 0 ]]; then
+        echo "FAIL (status code $statusCode)"
+        FAIL=$(( FAIL + 1 ))
+    else
+        echo "ok"
+        PASS=$(( PASS + 1 ))
+        rm "${BASE}.diff"
+    fi
+done
