@@ -225,27 +225,34 @@ moCallFunction() {
 # $2 - Content
 # $3 - Name of end tag
 # $4 - If -z, do standalone tag processing before finishing
+# $5 - Current context
 #
 # Returns nothing.
 moFindEndTag() {
-    local content remaining scanned standaloneBytes tag
+    local content remaining scanned standaloneBytes tag parsed preservedTag
 
     #: Find open tags
     scanned=""
     moSplit content "$2" '{{' '}}'
 
     while [[ "${#content[@]}" -gt 1 ]]; do
+        preservedTag="${content[1]}"
+        if [[ ! -z "$5" ]] && [[ "${content[1]}" =~ "(" ]]; then
+            parsed=$(moParse "${content[1]}" "$5" "$5" true)
+            content[1]=$parsed
+        fi
+
         moTrimWhitespace tag "${content[1]}"
 
         #: Restore content[1] before we start using it
-        content[1]='{{'"${content[1]}"'}}'
+        content[1]='{{'"${preservedTag}"'}}'
 
         case $tag in
             '#'* | '^'*)
                 #: Start another block
                 scanned="${scanned}${content[0]}${content[1]}"
                 moTrimWhitespace tag "${tag:1}"
-                moFindEndTag content "${content[2]}" "$tag" "loop"
+                moFindEndTag content "${content[2]}" "$tag" "loop" "$5"
                 scanned="${scanned}${content[0]}${content[1]}"
                 remaining=${content[2]}
                 ;;
@@ -291,12 +298,13 @@ moFindEndTag() {
 }
 
 
-# Internal: Find the first index of a substring.  If not found, sets the
-# index to -1.
+# Internal: Find the index of a substring.  If not found, sets the
+# index to -1. Defaults to finding the first index.
 #
 # $1 - Destination variable for the index
 # $2 - Haystack
 # $3 - Needle
+# $4 - Last occurrence of needle
 #
 # Returns nothing.
 moFindString() {
@@ -658,56 +666,84 @@ moLoop() {
 
 # Internal: Parse a block of text, writing the result to stdout.
 #
-# $1 - Block of text to change
+# $1 - Block of text to parse
 # $2 - Current name (the variable NAME for what {{.}} means)
 # $3 - true when no content before this, false otherwise
+# $4 - true if subexpression
 #
 # Returns nothing.
 moParse() {
     # Keep naming variables mo* here to not overwrite needed variables
     # used in the string replacements
-    local moArgs moBlock moContent moCurrent moIsBeginning moNextIsBeginning moTag moKey
+    local moArgs moBlock moContent moCurrent moIsBeginning moNextIsBeginning moTag moKey moIsSubExp moOpen moClose
 
     moCurrent=$2
     moIsBeginning=$3
+    moIsSubExp=$4
 
     # Find open tags
-    moSplit moContent "$1" '{{' '}}'
+    moOpen='{{'
+    moClose='}}'
+    if [[ $moIsSubExp == true ]]; then
+        moOpen='('
+        moClose=')'
+        moSplit moContent "$1" "$moOpen" "$moClose"
+    else
+        moSplit moContent "$1" "$moOpen" "$moClose"
+    fi
+
+
 
     while [[ "${#moContent[@]}" -gt 1 ]]; do
         moTrimWhitespace moTag "${moContent[1]}"
         moNextIsBeginning=false
 
+        if [[ ! "$moTag" == ">"* ]] && [[ "${moContent[1]}" =~ "(" ]]; then
+            moParsed=$(moParse "${moContent[1]}" "$moCurrent" "$moCurrent" true)
+            moContent[1]="$moParsed"
+            moTrimWhitespace moTag "${moContent[1]}"
+        fi
+
         case $moTag in
             '#'*)
                 # Loop, if/then, or pass content through function
                 # Sets context
-                moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
                 moTrimWhitespace moTag "${moTag:1}"
 
-                # Split arguments from the tag name. Arguments are passed to
-                # functions.
-                moArgs=$moTag
-                moTag=${moTag%% *}
-                moTag=${moTag%%$'\t'*}
-                moArgs=${moArgs:${#moTag}}
-                moFindEndTag moBlock "$moContent" "$moTag"
-                moFullTagName moTag "$moCurrent" "$moTag"
-
-                if moTest "$moTag"; then
-                    # Show / loop / pass through function
-                    if moIsFunction "$moTag"; then
-                        moCallFunction moContent "$moTag" "${moBlock[0]}" "$moArgs"
-                        moParse "$moContent" "$moCurrent" false
-                        moContent="${moBlock[2]}"
-                    elif moIsArray "$moTag"; then
-                        eval "moLoop \"\${moBlock[0]}\" \"$moTag\" \"\${!${moTag}[@]}\""
+                if [[ $moIsSubExp == true ]]; then
+                    moStandaloneDenied moContent "${moContent[@]}"
+                    if moTest "$moTag"; then
+                        echo -n "true"
                     else
-                        moParse "${moBlock[0]}" "$moCurrent" true
+                        echo -n "false"
                     fi
-                fi
+                else
+                    moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
 
-                moContent="${moBlock[2]}"
+                    # Split arguments from the tag name. Arguments are passed to
+                    # functions.
+                    moArgs=$moTag
+                    moTag=${moTag%% *}
+                    moTag=${moTag%%$'\t'*}
+                    moArgs=${moArgs:${#moTag}}
+                    moFindEndTag moBlock "$moContent" "$moTag" "" "$moCurrent"
+                    moFullTagName moTag "$moCurrent" "$moTag"
+
+                    if moTest "$moTag"; then
+                        # Show / loop / pass through function
+                        if moIsFunction "$moTag"; then
+                            moCallFunction moContent "$moTag" "${moBlock[0]}" "$moArgs"
+                            moParse "$moContent" "$moCurrent" false
+                            moContent="${moBlock[2]}"
+                        elif moIsArray "$moTag"; then
+                            eval "moLoop \"\${moBlock[0]}\" \"$moTag\" \"\${!${moTag}[@]}\""
+                        else
+                            moParse "${moBlock[0]}" "$moCurrent" true
+                        fi
+                    fi
+
+                    moContent="${moBlock[2]}"
+                fi
                 ;;
 
             '>'*)
@@ -725,16 +761,26 @@ moParse() {
 
             '^'*)
                 # Display section if named thing does not exist
-                moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
                 moTrimWhitespace moTag "${moTag:1}"
-                moFindEndTag moBlock "$moContent" "$moTag"
-                moFullTagName moTag "$moCurrent" "$moTag"
 
-                if ! moTest "$moTag"; then
-                    moParse "${moBlock[0]}" "$moCurrent" false "$moCurrent"
+                if [[ $moIsSubExp == true ]]; then
+                    moStandaloneDenied moContent "${moContent[@]}"
+                    if ! moTest "$moTag"; then
+                        echo -n "true"
+                    else
+                        echo -n "false"
+                    fi
+                else
+                    moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
+                    moFindEndTag moBlock "$moContent" "$moTag" "" "$moCurrent"
+                    moFullTagName moTag "$moCurrent" "$moTag"
+
+                    if ! moTest "$moTag"; then
+                        moParse "${moBlock[0]}" "$moCurrent" false "$moCurrent"
+                    fi
+
+                    moContent="${moBlock[2]}"
                 fi
-
-                moContent="${moBlock[2]}"
                 ;;
 
             '!'*)
@@ -808,7 +854,7 @@ moParse() {
         esac
 
         moIsBeginning=$moNextIsBeginning
-        moSplit moContent "$moContent" '{{' '}}'
+        moSplit moContent "$moContent" "$moOpen" "$moClose"
     done
 
     echo -n "${moContent[0]}"
@@ -934,28 +980,39 @@ moShow() {
 #
 # Returns nothing.
 moSplit() {
-    local pos result
+    local moNext moResult moOpenPos moClosePos moFurthest
 
-    result=( "$2" )
-    moFindString pos "${result[0]}" "$3"
+    moResult=( "$2" )
+    moClosePos=-1
 
-    if [[ "$pos" -ne -1 ]]; then
-        # The first delimiter was found
-        result[1]=${result[0]:$pos + ${#3}}
-        result[0]=${result[0]:0:$pos}
+    moFindString moOpenPos "${moResult[0]}" "$3"
+    if [[ $moOpenPos -gt -1 ]]; then
+        moResult[1]=${moResult[0]:$moOpenPos + ${#3}}
+        moResult[0]=${moResult[0]:0:$moOpenPos}
 
+        moNext=$moOpenPos
         if [[ -n "${4-}" ]]; then
-            moFindString pos "${result[1]}" "$4"
+            # Is there another open delimiter inside this one?
+            moFindString moNext "${moResult[1]}" "$3"
+            moFindString moClosePos "${moResult[1]}" "$4"
 
-            if [[ "$pos" -ne -1 ]]; then
+            while [[ $moNext -gt ${#3} ]] && [[ $moClosePos -gt $moNext ]]; do
+                moFurthest=$(($moClosePos + ${#4}))
+                moFindString moNext "${moResult[1]:$moFurthest}" "$3"
+                moFindString moClosePos "${moResult[1]:$moFurthest}" "$4"
+                moNext=$(($moNext + $moFurthest))
+                moClosePos=$(($moFurthest + $moClosePos))
+            done
+
+            if [[ "$moClosePos" -ne -1 ]]; then
                 # The second delimiter was found
-                result[2]="${result[1]:$pos + ${#4}}"
-                result[1]="${result[1]:0:$pos}"
+                moResult[2]="${moResult[1]:$moClosePos + ${#4}}"
+                moResult[1]="${moResult[1]:0:$moClosePos}"
             fi
         fi
     fi
 
-    local "$1" && moIndirectArray "$1" "${result[@]}"
+    local "$1" && moIndirectArray "$1" "${moResult[@]}"
 }
 
 

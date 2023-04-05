@@ -1,0 +1,9 @@
+Function: {{quote (x)}}
+Specific Element: {{repo.(i)}}
+Loop:
+{{#repo}}
+  <b>{{double_quote (quote (.))}} {{.}}</b>
+{{/repo}}
+
+{{inter_examp (#exists) (^doesnt) (exists) world}}
+X: {{x}}
