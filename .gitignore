@@ -2,6 +2,7 @@
 diagnostic.partial
 diagnostic.test
 tests/*.diff
+tests/*.actual
 spec/
 spec-runner/
 node_modules/

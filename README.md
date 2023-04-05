@@ -118,6 +118,18 @@ There are more scripts available in the [demos directory](demo/) that could help
 There are additional features that the program supports. Try using `mo --help` to see what is available.
 
 
+Security
+-----------
+
+Because `mo` uses environment variables that could be unsafe in the event that `mo` is invoked programmatically with user-input, `mo` provides `--strict` mode when used with `--source=`. `mo` will attempt to track variables that are created by each `--source=`'ed environment file, and will disallow access to external variables.
+
+To use this, `--strict` must be used with `--source=`:
+
+```bash
+./mo --strict --source=.env my-template.mustache
+```
+
+
 Concessions
 -----------
 

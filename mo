@@ -95,8 +95,15 @@
 #                  treated as an empty value for the purposes of conditionals.
 # MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate a
 #                  help message.
+# MO_STRICT_MODE - Used to limit access to variables outside of sourced files
 #
 # Returns nothing.
+
+MO_HAS_SOURCED=false
+MO_STRICT_SWITCH=false
+MO_STRICT_MODE=false
+MO_SOURCED_VARS=()
+
 mo() (
     # This function executes in a subshell so IFS is reset.
     # Namespace this variable so we don't conflict with desired values.
@@ -117,6 +124,10 @@ mo() (
                     -h|--h|--he|--hel|--help|-\?)
                         moUsage "$0"
                         exit 0
+                        ;;
+
+                    --strict)
+                        MO_STRICT_SWITCH=true
                         ;;
 
                     --allow-function-arguments)
@@ -147,8 +158,21 @@ mo() (
                         fi
 
                         if [[ -f "$f2source" ]]; then
+                            MO_HAS_SOURCED=true
+
+                            local BEFORE_VARS AFTER_VARS ALL_VARS
+                            BEFORE_VARS=(`cat <(set -o posix ; set) | cut -d'=' -f1`)
+
                             # shellcheck disable=SC1090
                             . "$f2source"
+                            AFTER_VARS=(`cat <(set -o posix ; set) | cut -d'=' -f1`)
+
+                            ALL_VARS=( ${BEFORE_VARS[@]} ${AFTER_VARS[@]} )
+                            MO_SOURCED_VARS=( \
+                                ${MO_SOURCED_VARS[@]} \
+                                $(echo "${ALL_VARS[@]}" | tr ' ' '\n' | sort | uniq -u)\
+                            )
+                            unset BEFORE_VARS AFTER_VARS ALL_VARS
                         else
                             echo "No such file: $f2source" >&2
                             exit 1
@@ -169,8 +193,17 @@ mo() (
         done
     fi
 
+    # Allow turning off Strict Mode
+    if [[ $MO_HAS_SOURCED == true ]] && [[ $MO_STRICT_SWITCH == true ]]; then
+        MO_STRICT_MODE=true
+    fi
+
     moGetContent moContent "${files[@]}" || return 1
     moParse "$moContent" "" true
+
+    for v in ${MO_SOURCED_VARS[@]}; do
+        unset -v $v > /dev/null 2>&1
+    done
 )
 
 
@@ -908,6 +941,7 @@ moShow() {
             fi
         fi
     else
+        moTestLegal "${moNameParts[0]}" || return 1
         # Further subindexes are disallowed
         eval "echo -n \"\${${moNameParts[0]}[${moNameParts[1]%%.*}]}\""
     fi
@@ -989,6 +1023,18 @@ moStandaloneDenied() {
 }
 
 
+# Internal: Determines if a variable name is outside of the scope of the template
+#
+# Returns 0 if variable is safe, Returns 1 if variable is illegal
+moTestLegal() {
+    [[ $MO_STRICT_MODE != true ]] && return 0
+    [[ " ${MO_SOURCED_VARS[*]} " =~ " ${1%.*} " ]] && return 0
+
+    echo "Illegal variable access $1" >&2
+    return 1
+}
+
+
 # Internal: Determines if the named thing is a function or if it is a
 # non-empty environment variable.  When MO_FALSE_IS_EMPTY is set to a
 # non-empty value, then "false" is also treated is an empty value.
@@ -1004,6 +1050,9 @@ moStandaloneDenied() {
 # Returns 0 if the name is not empty, 1 otherwise.  When MO_FALSE_IS_EMPTY
 # is set, this returns 1 if the name is "false".
 moTest() {
+    # Don't allow access to outside names
+    moTestLegal "$1" || return 1
+
     # Test for functions
     moIsFunction "$1" && return 0
 
@@ -1030,7 +1079,11 @@ moTest() {
 #
 # Returns true (0) if the variable is set, 1 if the variable is unset.
 moTestVarSet() {
-    [[ "${!1-a}" == "${!1-b}" ]]
+    # Don't allow access to outside names
+    moTestLegal "$1" || return 1
+
+    [[ "${!1-a}" == "${!1-b}" ]] && return 0
+    return 1
 }
 
 
