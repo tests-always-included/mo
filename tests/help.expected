@@ -25,4 +25,4 @@ Options:
          Load FILE into the environment before processing templates.
          Can be used multiple times.
 
-MO_VERSION=2.2.0
+MO_VERSION=2.4.1
