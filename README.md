@@ -158,7 +158,7 @@ Output:
 ```
 
 
-### Helpers / Function Arguments with
+### Helpers / Function Arguments
 
 Function Arguments are not a part of the official Mustache implementation, and are more often associated with Handlebar's Helper functionality.
 
@@ -168,7 +168,7 @@ Function Arguments are not a part of the official Mustache implementation, and a
 {{myfunc foo bar}}
 ```
 
-For security reasons, this arguments are not immediately available to function calls without a flag.
+For security reasons, these arguments are not immediately available to function calls without a flag.
 
 #### with `--allow-function-arguments`
 
