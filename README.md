@@ -118,6 +118,77 @@ There are more scripts available in the [demos directory](demo/) that could help
 There are additional features that the program supports. Try using `mo --help` to see what is available.
 
 
+Enhancements
+-----------
+
+In addition to many of the features built-in to Mustache, `mo` includes a number of unique features that make it a bit more powerful.
+
+### Loop @key
+
+`mo` implements Handlebar's `@key` references for outputting the key inside of a loop:
+
+Env:
+```bash
+myarr=( foo bar )
+
+# Bash v4+
+declare -A myassoc
+myassoc[hello]="mo"
+myassoc[world]="is great"
+```
+
+Template:
+```handlebars
+{{#myarr}}
+ - {{@key}} {{.}}
+{{/myarr}}
+
+{{#myassoc}}
+ * {{@key}} {{.}}
+{{/myassoc}}
+```
+
+Output:
+```markdown
+ - 0 foo
+ - 1 bar
+
+ * hello mo
+ * world is great
+```
+
+
+### Helpers / Function Arguments with
+
+Function Arguments are not a part of the official Mustache implementation, and are more often associated with Handlebar's Helper functionality.
+
+`mo` allows for passing strings to functions.
+
+```handlebars
+{{myfunc foo bar}}
+```
+
+For security reasons, this arguments are not immediately available to function calls without a flag.
+
+#### with `--allow-function-arguments`
+
+```bash
+myfunc() {
+    # Outputs "foo, bar"
+    echo "$1, $2";
+}
+```
+
+#### Using `$MO_FUNCTION_ARGS`
+
+```bash
+myfunc() {
+    # Outputs "foo, bar"
+    echo "${MO_FUNCTION_ARGS[0]}, ${MO_FUNCTION_ARGS[1]}";
+}
+```
+
+
 Concessions
 -----------
 
