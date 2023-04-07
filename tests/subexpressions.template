@@ -1,9 +1,9 @@
-Function: {{quote (x)}}
+Function: {{quote x}}
 Specific Element: {{repo.(i)}}
 Loop:
 {{#repo}}
-  <b>{{double_quote (quote (.))}} {{.}}</b>
+  <b>{{double_quote "(quote .)"}} {{.}}</b>
 {{/repo}}
 
-{{inter_examp (#exists) (^doesnt) (exists) world}}
+{{inter_examp (#exists) (^doesnt) exists "world help me \"escape !" exists "testing"}}
 X: {{x}}

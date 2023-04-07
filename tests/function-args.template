@@ -1,4 +1,4 @@
 No args: {{testArgs}} - done
-One arg: {{testArgs one}} - done
+One arg: {{testArgs "one"}} - done
 Getting name in a string: {{testArgs "The name is $name"}} - done
-Reverse this: {{#pipeTo rev}}abcde{{/pipeTo}}
+Reverse this: {{#pipeTo "rev"}}abcde{{/pipeTo}}

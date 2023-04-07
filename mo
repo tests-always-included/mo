@@ -178,31 +178,39 @@ mo() (
 #
 # $1 - Variable for output
 # $2 - Function to call
-# $3 - Content to pass
-# $4 - Additional arguments as a single string
+# $3 - Current Context
+# $4 - Content to pass
+# $5 - Additional arguments as a single string
 #
 # This can be dangerous, especially if you are using tags like
 # {{someFunction ; rm -rf / }}
 #
 # Returns nothing.
 moCallFunction() {
-    local moArgs moContent moFunctionArgs moFunctionResult
+    local moArgs moQuoted moContent MO_FUNCTION_ARGS moFunctionResult
+
+    moTrimWhitespace MO_FUNCTION_ARGS "$5"
+    moSplitArgs MO_FUNCTION_ARGS "$MO_FUNCTION_ARGS"
 
     moArgs=()
-    moTrimWhitespace moFunctionArgs "$4"
+    for (( m=0; m<${#MO_FUNCTION_ARGS[@]}; m++ )); do
+        MO_FUNCTION_ARGS[$m]="$(moParse "(${MO_FUNCTION_ARGS[$m]})" "$3" "$3" true)"
+        moQuote moQuoted "${MO_FUNCTION_ARGS[$m]}"
+        moArgs+=($moQuoted)
+    done
 
     # shellcheck disable=SC2031
-    if [[ -n "${MO_ALLOW_FUNCTION_ARGUMENTS-}" ]]; then
+    if [[ ! -n "${MO_ALLOW_FUNCTION_ARGUMENTS-}" ]]; then
         # Intentionally bad behavior
         # shellcheck disable=SC2206
-        moArgs=($4)
+        moArgs=()
     fi
 
-    moContent=$(echo -n "$3" | MO_FUNCTION_ARGS="$moFunctionArgs" eval "$2" "${moArgs[@]}") || {
+    moContent=$(echo -n "$4" | eval "$2" "${moArgs[@]}") || {
         moFunctionResult=$?
         # shellcheck disable=SC2031
         if [[ -n "${MO_FAIL_ON_FUNCTION-}" && "$moFunctionResult" != 0 ]]; then
-            echo "Function '$2' with args (${moArgs[*]+"${moArgs[@]}"}) failed with status code $moFunctionResult"
+            echo "Function '$2' with args (${MO_FUNCTION_ARGS[*]+"${MO_FUNCTION_ARGS[@]}"}) failed with status code $moFunctionResult"
             exit "$moFunctionResult"
         fi
     }
@@ -313,6 +321,72 @@ moFindString() {
     string=${2%%"$3"*}
     [[ "$string" == "$2" ]] && pos=-1 || pos=${#string}
     local "$1" && moIndirect "$1" "$pos"
+}
+
+
+# Internal: Find the index of the first unescaped backslash
+#
+# $1 - Destination variable for the index
+# $2 - Haystack
+#
+# Returns nothing.
+moFindUnescapedSlash() {
+    local moSlashPos moSlashHaystack moSlashOffset moEscSlashOffset moEscaped
+
+    moSlashHaystack=$2
+    moSlashPos=-2
+    moEscaped=true
+
+    while [[ $moEscaped == true ]] && [[ $moSlashPos -ne ${#2} ]]; do
+        moSlashOffset=$(($moSlashPos + 2))
+        moSlashHaystack="${2:$moSlashOffset}"
+
+        moFindString moSlashPos "$moSlashHaystack" "\\"
+        moSlashPos=$(($moSlashOffset + $moSlashPos))
+        moEscSlashOffset=$(($moSlashPos+1))
+
+        moEscaped=false
+        [[ "${2:$moSlashPos+1:1}" == "\\" ]] && moEscaped=true
+    done
+
+    [[ $moSlashPos -eq ${#2} ]] && moSlashPos=-1
+    local "$1" && moIndirect "$1" "$moSlashPos"
+}
+
+
+# Internal: Find the index of an unescaped substring.  If not found, sets the
+# index to -1.
+#
+# $1 - Destination variable for the index
+# $2 - Haystack
+# $3 - Needle
+#
+# Returns nothing.
+moFindUnescaped() {
+    local moHaystack moPos moOffset moEscPos
+
+    if [[ "$3" == "\\" ]]; then
+        moFindUnescapedSlash "$1" "$2"
+        return 0
+    fi
+
+    moHaystack=$2
+    moPos=-1
+    moEscPos=-2
+
+    while [[ $moPos -ne ${#2} ]] && [[ $moEscPos -ne -1 ]] && [[ $(($moEscPos+1)) -eq $moPos ]]; do
+        moOffset=$(($moPos + 1))
+        moHaystack="${2:$moOffset}"
+
+        moFindString moPos "$moHaystack" "$3"
+        moPos=$(($moOffset + $moPos))
+
+        moFindUnescapedSlash moEscPos "$moHaystack"
+        moEscPos=$(($moOffset + $moEscPos))
+    done
+
+    [[ $moPos -eq ${#2} ]] && moPos=-1
+    local "$1" && moIndirect "$1" "$moPos"
 }
 
 
@@ -429,6 +503,65 @@ moIndentLines() {
     result="$result$content"
 
     local "$1" && moIndirect "$1" "$result"
+}
+
+
+# Internal: Removes escape characters for displaying.
+#
+# $1 - Destination variable for the finalized content
+# $2 - Content to be cleaned
+#
+# Returns nothing.
+moUnescape() {
+    local moUnResult moSlashPos moUnclean
+
+    if [[ "$2" =~ "\\" ]]; then
+        moUnResult=""
+        moUnclean="$2"
+        moSlashPos=-1
+
+        moFindString moSlashPos "$2" "\\"
+
+        while [[ $moSlashPos -gt -1 ]]; do
+            moUnResult+="${moUnclean:0:$moSlashPos}"
+            moUnclean="${moUnclean:$moSlashPos+1}"
+            moFindString moSlashPos "$moUnclean" "\\"
+        done
+        moUnResult+=$moUnclean
+    else
+        moUnResult="$2"
+    fi
+
+    local "$1" && moIndirect "$1" "$moUnResult"
+}
+
+
+# Internal: Outputs a string of text with quotes around it, and escapes existing quotes
+#
+# $1 - Destination variable
+# $2 - Content to quote
+#
+# Returns nothing.
+moQuote() {
+    #echo "FOR:       $1" >&2
+    #echo "UNQUOTED: >$2<" >&2
+    #echo "QUOTED:   >\"${2//\"/\\\"}\"<" >&2
+    local "$1" && moIndirect "$1" "\"${2//\"/\\\"}\""
+}
+
+
+# Internal: Removes quotes from a string an unescapes the quotes inside of it
+#
+# $1 - Destination variable
+# $2 - Content to unquote
+#
+# Returns nothing.
+moUnquote() {
+    local moLen moUnquoted
+    moUnquoted="$2"
+    moLen=${#moUnquoted}
+    moUnescape moUnquoted "${moUnquoted:1:$moLen - 2}"
+    local "$1" && moIndirect "$1" "$moUnquoted"
 }
 
 
@@ -675,7 +808,7 @@ moLoop() {
 moParse() {
     # Keep naming variables mo* here to not overwrite needed variables
     # used in the string replacements
-    local moArgs moBlock moContent moCurrent moIsBeginning moNextIsBeginning moTag moKey moIsSubExp moOpen moClose
+    local moArgs moBlock moContent moCurrent moIsBeginning moNextIsBeginning moTag moKey moIsSubExp moOpen moClose moParsed
 
     moCurrent=$2
     moIsBeginning=$3
@@ -692,14 +825,12 @@ moParse() {
         moSplit moContent "$1" "$moOpen" "$moClose"
     fi
 
-
-
     while [[ "${#moContent[@]}" -gt 1 ]]; do
         moTrimWhitespace moTag "${moContent[1]}"
         moNextIsBeginning=false
 
-        if [[ ! "$moTag" == ">"* ]] && [[ "${moContent[1]}" =~ "(" ]]; then
-            moParsed=$(moParse "${moContent[1]}" "$moCurrent" "$moCurrent" true)
+        if [[ ! "$moTag" == ">"* ]] && [[ "$moTag" =~ "(" ]]; then
+            moParsed=$(moParse "$moTag" "$moCurrent" "$moCurrent" true)
             moContent[1]="$moParsed"
             moTrimWhitespace moTag "${moContent[1]}"
         fi
@@ -712,11 +843,9 @@ moParse() {
 
                 if [[ $moIsSubExp == true ]]; then
                     moStandaloneDenied moContent "${moContent[@]}"
-                    if moTest "$moTag"; then
-                        echo -n "true"
-                    else
-                        echo -n "false"
-                    fi
+                    echo -n "\""
+                    moTest "$moTag" && echo -n "true" || echo -n "false"
+                    echo -n "\""
                 else
                     moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
 
@@ -732,7 +861,7 @@ moParse() {
                     if moTest "$moTag"; then
                         # Show / loop / pass through function
                         if moIsFunction "$moTag"; then
-                            moCallFunction moContent "$moTag" "${moBlock[0]}" "$moArgs"
+                            moCallFunction moContent "$moTag" "$moCurrent" "${moBlock[0]}" "$moArgs"
                             moParse "$moContent" "$moCurrent" false
                             moContent="${moBlock[2]}"
                         elif moIsArray "$moTag"; then
@@ -759,17 +888,22 @@ moParse() {
                 moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
                 ;;
 
+            '"'*|"'"*)
+                # Quoted string
+                moUnquote moContent "${moContent[1]}"
+                echo -n "$moContent"
+                moContent=""
+                ;;
+
             '^'*)
                 # Display section if named thing does not exist
                 moTrimWhitespace moTag "${moTag:1}"
 
                 if [[ $moIsSubExp == true ]]; then
                     moStandaloneDenied moContent "${moContent[@]}"
-                    if ! moTest "$moTag"; then
-                        echo -n "true"
-                    else
-                        echo -n "false"
-                    fi
+                    echo -n "\""
+                    ! moTest "$moTag" && echo -n "true" || echo -n "false"
+                    echo -n "\""
                 else
                     moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
                     moFindEndTag moBlock "$moContent" "$moTag" "" "$moCurrent"
@@ -849,7 +983,7 @@ moParse() {
                 moFullTagName moTag "$moCurrent" "$moTag"
 
                 # Quote moArgs here, do not quote it later.
-                moShow "$moTag" "$moCurrent" "$moArgs"
+                moShow "$moTag" "$moCurrent" "$moArgs" $moIsSubExp
                 ;;
         esac
 
@@ -944,7 +1078,7 @@ moShow() {
     local moJoined moNameParts moContent
 
     if moIsFunction "$1"; then
-        moCallFunction moContent "$1" "" "$3"
+        moCallFunction moContent "$1" "$2" "" "$3"
         moParse "$moContent" "$2" false
         return 0
     fi
@@ -977,6 +1111,7 @@ moShow() {
 # $2 - String to split
 # $3 - Starting delimiter
 # $4 - Ending delimiter (optional)
+# $5 - Restore delimiter (optional)
 #
 # Returns nothing.
 moSplit() {
@@ -985,7 +1120,7 @@ moSplit() {
     moResult=( "$2" )
     moClosePos=-1
 
-    moFindString moOpenPos "${moResult[0]}" "$3"
+    moFindUnescaped moOpenPos "${moResult[0]}" "$3"
     if [[ $moOpenPos -gt -1 ]]; then
         moResult[1]=${moResult[0]:$moOpenPos + ${#3}}
         moResult[0]=${moResult[0]:0:$moOpenPos}
@@ -993,13 +1128,13 @@ moSplit() {
         moNext=$moOpenPos
         if [[ -n "${4-}" ]]; then
             # Is there another open delimiter inside this one?
-            moFindString moNext "${moResult[1]}" "$3"
-            moFindString moClosePos "${moResult[1]}" "$4"
+            moFindUnescaped moNext "${moResult[1]}" "$3"
+            moFindUnescaped moClosePos "${moResult[1]}" "$4"
 
             while [[ $moNext -gt ${#3} ]] && [[ $moClosePos -gt $moNext ]]; do
                 moFurthest=$(($moClosePos + ${#4}))
-                moFindString moNext "${moResult[1]:$moFurthest}" "$3"
-                moFindString moClosePos "${moResult[1]:$moFurthest}" "$4"
+                moFindUnescaped moNext "${moResult[1]:$moFurthest}" "$3"
+                moFindUnescaped moClosePos "${moResult[1]:$moFurthest}" "$4"
                 moNext=$(($moNext + $moFurthest))
                 moClosePos=$(($moFurthest + $moClosePos))
             done
@@ -1012,7 +1147,46 @@ moSplit() {
         fi
     fi
 
+    [[ "$5" == "true" ]] && moResult[1]="$3${moResult[1]}$4"
+
     local "$1" && moIndirectArray "$1" "${moResult[@]}"
+}
+
+
+# Internal: Parse function arguments
+#
+# $1 - Destination
+# $2 - Arguments as string
+#
+# Returns nothing.
+moSplitArgs() {
+    local moSCurArg moSArgs moSingle moDouble moParen
+
+    moSArgs=()
+
+    moSCurArg=()
+    moSCurArg[2]=$2
+    while : ; do
+        [[ ! -z "${moSCurArg[2]}" ]] || break
+
+        moFindUnescaped moSingle "${moSCurArg[2]}" "'"
+        moFindUnescaped moDouble "${moSCurArg[2]}" "\""
+        [[ $moSingle -gt -1 ]] || [[ $moDouble -gt -1 ]] || {
+            moSArgs+=(${moSCurArg[2]})
+            break
+        }
+
+        if [[ $moSingle < $moDouble ]] && [[ $moSingle -gt -1 ]]; then
+            moSplit moSCurArg "${moSCurArg[2]}" "'" "'" true
+        else
+            moSplit moSCurArg "${moSCurArg[2]}" '"' '"' true
+        fi
+
+        moSArgs+=(${moSCurArg[0]})
+        moSArgs+=("${moSCurArg[1]}")
+    done
+
+    local "$1" && moIndirectArray "$1" "${moSArgs[@]}"
 }
 
 
