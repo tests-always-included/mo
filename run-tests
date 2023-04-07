@@ -7,7 +7,7 @@ cd "${0%/*}" || exit 1
 PASS=0
 FAIL=0
 
-for TEST in tests/*.expected; do
+for TEST in tests/$1*.expected; do
     export BASE="${TEST%.expected}"
     export MO_FALSE_IS_EMPTY=
 
@@ -23,6 +23,9 @@ for TEST in tests/*.expected; do
             . "${BASE}.env"
             echo "Do not read this input" | mo "${BASE}.template"
         fi
+    ) | (
+        cat > "${BASE}.actual";
+        cat "${BASE}.actual"
     ) | diff -U5 - "${TEST}" > "${BASE}.diff"
 
     statusCode=$?
@@ -34,6 +37,7 @@ for TEST in tests/*.expected; do
         echo "ok"
         PASS=$(( PASS + 1 ))
         rm "${BASE}.diff"
+        rm "${BASE}.actual"
     fi
 done
 

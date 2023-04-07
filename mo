@@ -195,7 +195,7 @@ moCallFunction() {
     moArgs=()
     for (( m=0; m<${#MO_FUNCTION_ARGS[@]}; m++ )); do
         MO_FUNCTION_ARGS[$m]="$(moParse "(${MO_FUNCTION_ARGS[$m]})" "$3" "$3" true)"
-        moQuote moQuoted "${MO_FUNCTION_ARGS[$m]}"
+        moSanitize moQuoted "${MO_FUNCTION_ARGS[$m]}"
         moArgs+=($moQuoted)
     done
 
@@ -542,11 +542,17 @@ moUnescape() {
 # $2 - Content to quote
 #
 # Returns nothing.
-moQuote() {
-    #echo "FOR:       $1" >&2
-    #echo "UNQUOTED: >$2<" >&2
-    #echo "QUOTED:   >\"${2//\"/\\\"}\"<" >&2
-    local "$1" && moIndirect "$1" "\"${2//\"/\\\"}\""
+moSanitize() {
+    local moSanitized="${2//\\/\\\\}"         # Escape backslashes
+    moSanitized="${moSanitized//\$/\\\$}" # Escape dollar signs
+    moSanitized="${moSanitized//\"/\\\"}" # Escape double quotes
+    moSanitized="${moSanitized//\`/\\\`}" # Escape backticks
+    #moSanitized="${moSanitized//\*/\\*}"  # Escape asterisks
+    #moSanitized="${moSanitized//\}/\}}"  # Escape closing curly braces
+    #moSanitized="${moSanitized//\$\{/\$\{}"  # Escape opening curly braces
+    #moSanitized="${moSanitized//\{\!/\\!}"  # Escape exclamation marks
+    local "$1" && moIndirect "$1" "\"$moSanitized\""
+    #local "$1" && moIndirect "$1" "\"${2//\"/\\\"}\""
 }
 
 
