@@ -3,22 +3,23 @@ cd "${0%/*}" || exit 1
 . ../run-tests
 
 testArgs() {
-    echo "$MO_FUNCTION_ARGS"
+    local args=$(declare -p MO_FUNCTION_ARGS)
+    echo "${args#*=}"
 }
 template() {
     cat <<EOF
-No args: [{{testArgs}}] - done
-One arg: [{{testArgs one}}] - done
-Multiple arguments: [{{testArgs aa bb cc 'x' " ! {[_.| }}] - done
-Evil: [{{testArgs bla; cat /etc/issue}}] - done
+No args: {{testArgs}} - done
+One arg: {{testArgs 'one'}} - done
+Multiple arguments: {{testArgs 'aa' 'bb' 'cc' 'x' "" '!' '{[_.|' }} - done
+Evil: {{testArgs bla; cat /etc/issue}} - done
 EOF
 }
 expected() {
     cat <<EOF
-No args: [] - done
-One arg: [one] - done
-Multiple arguments: [aa bb cc 'x' " ! {[_.|] - done
-Evil: [bla; cat /etc/issue] - done
+No args: () - done
+One arg: ([0]="one") - done
+Multiple arguments: ([0]="aa" [1]="bb" [2]="cc" [3]="x" [4]="" [5]="!" [6]="{[_.|") - done
+Evil: ([0]="" [1]="" [2]="") - done
 EOF
 }
 

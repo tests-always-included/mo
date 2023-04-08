@@ -4,6 +4,7 @@ cd "${0%/*}" || exit 1
 
 person=""
 template=""
+returnCode=1
 arguments=(--something)
 expected() {
     cat <<EOF

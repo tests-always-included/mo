@@ -7,7 +7,7 @@ template() {
     cat <<EOF
 <h2>Names</h2>
 {{#names}}
-  {{> partial.partial}}
+  {{> fixtures/partial.partial}}
 {{/names}}
 EOF
 }
@@ -15,7 +15,6 @@ expected() {
     cat <<EOF
 <h2>Names</h2>
   <strong>Tyler</strong>
-
 EOF
 }
 

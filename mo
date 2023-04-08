@@ -222,7 +222,7 @@ mo::usage() {
         if [[ "${line:0:2}" == "#/" ]]; then
             echo "${line:3}"
         fi
-    done < <(cat "$MO_ORIGINAL_COMMAND")
+    done < "$MO_ORIGINAL_COMMAND"
     echo ""
     echo "MO_VERSION=$MO_VERSION"
 }
@@ -431,7 +431,7 @@ mo::chomp() {
 #
 # Returns nothing.
 mo::parse() {
-    local moContent moCurrent moOpenDelimiter moCloseDelimieter moResult moSplit moParseChunk moFastMode moStandaloneContent
+    local moContent moCurrent moOpenDelimiter moCloseDelimieter moResult moSplit moParseChunk moFastMode moStandaloneContent moRemainder
     moContent=$2
     moCurrent=$3
     moCurrentBlock=$4
@@ -444,7 +444,8 @@ mo::parse() {
     # This is a trick to make the standalone tag detection believe it's on a
     # new line because there's no other way to easily tell the difference
     # between a lone tag on a line and two tags where the first one evaluated
-    # to an empty string.
+    # to an empty string. Whenever a standalone tag is encountered, this trick
+    # needs to be reset to a newline.
     moStandaloneContent=$'\n'
     mo::debug "Starting parse, current: $moCurrent, ending tag: $moCurrentBlock, fast: $moFastMode"
 
@@ -471,7 +472,7 @@ mo::parse() {
                 '/'*)
                     # Closing tag
                     mo::parseCloseTag moParseChunk "$moResult" "$moContent" "$moCurrent" "$moCloseDelimiter" "$moCurrentBlock" "$moStandaloneContent"
-                    moRemainder=${moParseChunk[2]}
+                    moRemainder=${moParseChunk[3]}
                     ;;
 
                 '^'*)
@@ -488,8 +489,8 @@ mo::parse() {
                     # Change delimiters
                     # Any two non-whitespace sequences separated by whitespace.
                     mo::parseDelimiter moParseChunk "$moResult" "$moContent" "$moCloseDelimiter" "$moStandaloneContent"
-                    moOpenDelimiter=${moParseChunk[2]}
-                    moCloseDelimiter=${moParseChunk[3]}
+                    moOpenDelimiter=${moParseChunk[3]}
+                    moCloseDelimiter=${moParseChunk[4]}
                     ;;
 
                 '&'*)
@@ -509,8 +510,8 @@ mo::parse() {
             moResult=${moParseChunk[0]}
             moContent=${moParseChunk[1]}
 
-            # Do not employ the trick after the first tag gets processed (see above)
-            moStandaloneContent=''
+            # See above for a comment detailing this standalone trick
+            moStandaloneContent=${moParseChunk[2]}
         else
             moResult="$moResult$moContent"
             moContent=""
@@ -535,6 +536,7 @@ mo::parse() {
 # The destination value will be an array
 #     [0] = the result text
 #     [1] = remaining content to parse, excluding the closing delimiter
+#     [2] = standalone content trick
 #
 # Returns nothing
 mo::parseBlock() {
@@ -556,6 +558,9 @@ mo::parseBlock() {
         if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
             mo::standaloneProcessBefore moPrevious "$moPrevious"
             mo::standaloneProcessAfter moContent "$moContent"
+            moStandaloneContent=$'\n'
+        else
+            moStandaloneContent=""
         fi
 
         # Get contents of block after parsing
@@ -575,17 +580,30 @@ mo::parseBlock() {
         eval "moArrayIndexes=(\"\${!${moArrayName}[@]}\")"
 
         if [[ "${#moArrayIndexes[@]}" -lt 1 ]]; then
-            # No elements. Skip the block processing
-            mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-EMPTY"
-            moResult=""
+            # No elements
+            if [[ "$moInvertBlock" == "true" ]]; then
+                # Show the block
+                mo::parse moParseResult "$moContent" "$moArrayName" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" ""
+                moResult=${moParseResult[0]}
+            else
+                # Skip the block processing
+                mo::parse moParseResult "$moContent" "$moCurrent" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-EMPTY"
+                moResult=""
+            fi
         else
-            moResult=""
-            # Process for each element in the array
-            for moArrayIndex in "${moArrayIndexes[@]}"; do
-                mo::debug "Iterate over array using element: $moArrayName.$moArrayIndex"
-                mo::parse moParseResult "$moContent" "$moArrayName.$moArrayIndex" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" ""
-                moResult="$moResult${moParseResult[0]}"
-            done
+            if [[ "$moInvertBlock" == "true" ]]; then
+                # Skip the block processing
+                mo::parse moParseResult "$moContent" "$moCurrent" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-EMPTY"
+                moResult=""
+            else
+                moResult=""
+                # Process for each element in the array
+                for moArrayIndex in "${moArrayIndexes[@]}"; do
+                    mo::debug "Iterate over array using element: $moArrayName.$moArrayIndex"
+                    mo::parse moParseResult "$moContent" "$moArrayName.$moArrayIndex" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" ""
+                    moResult="$moResult${moParseResult[0]}"
+                done
+            fi
         fi
 
         moContent=${moParseResult[1]}
@@ -611,7 +629,7 @@ mo::parseBlock() {
         moContent=${moParseResult[1]}
     fi
 
-    local "$1" && mo::indirectArray "$1" "$moPrevious$moResult" "$moContent"
+    local "$1" && mo::indirectArray "$1" "$moPrevious$moResult" "$moContent" "$moStandaloneContent"
 }
 
 
@@ -628,13 +646,15 @@ mo::parseBlock() {
 # The destination value will be an array
 #     [0] = the result text
 #     [1] = remaining content to parse, excluding the closing delimiter
+#     [2] = standalone content trick
 #
-# Indentation should be applied to the entire partial's contents that are
-# returned. Adding indentation is outside the scope of this function.
+# Indentation will be applied to the entire partial's contents that are
+# returned. This indentation is based on the whitespace that ends the
+# previously parsed content.
 #
 # Returns nothing
 mo::parsePartial() {
-    local moContent moCurrent moCloseDelimiter moFilename moResult moFastMode moPrevious moStandaloneContent
+    local moContent moCurrent moCloseDelimiter moFilename moResult moFastMode moPrevious moStandaloneContent moIndentation moN moR
 
     moPrevious=$2
     mo::trim moContent "${3:1}"
@@ -644,10 +664,19 @@ mo::parsePartial() {
     moStandaloneContent=$7
     mo::chomp moFilename "${moContent%%$moCloseDelimiter*}"
     moContent="${moContent#*$moCloseDelimiter}"
+    moIndentation=""
 
     if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
+        moN=$'\n'
+        moR=$'\r'
+        moIndentation="$moN${moPrevious//$moR/$moN}"
+        moIndentation=${moIndentation##*$moN}
+        mo::debug "Adding indentation: '$moIndentation'"
         mo::standaloneProcessBefore moPrevious "$moPrevious"
         mo::standaloneProcessAfter moContent "$moContent"
+        moStandaloneContent=$'\n'
+    else
+        moStandaloneContent=""
     fi
 
     if [[ -n "$moFastMode" ]]; then
@@ -662,7 +691,9 @@ mo::parsePartial() {
             # but that is difficult when only given filenames.
             cd "$(dirname -- "$moFilename")" || exit 1
             echo "$(
-                mo::contentFile moResult "${moFilename##*/}" || exit 1
+                if ! mo::contentFile moResult "${moFilename##*/}"; then
+                    exit 1
+                fi
 
                 # Delimiters are reset when loading a new partial
                 mo::parse moResult "$moResult" "$moCurrent" "" "{{" "}}" ""
@@ -671,14 +702,16 @@ mo::parsePartial() {
                 echo -n "${moResult[0]}${moResult[1]}."
             )" || exit 1
         ) || exit 1
-        moLen=${#moResult}
 
-        if [[ $moLen -gt 0 ]]; then
-            moLen=$((moLen - 1))
+        if [[ ${#moResult} -eq 0 ]]; then
+            mo::debug "Error detected when trying to read the file"
+            exit 1
         fi
+
+        mo::indentLines moResult "${moResult%.}" "$moIndentation"
     fi
 
-    local "$1" && mo::indirectArray "$1" "$moPrevious${moResult:0:moLen}" "$moContent"
+    local "$1" && mo::indirectArray "$1" "$moPrevious$moResult" "$moContent" "$moStandaloneContent"
 }
 
 
@@ -695,7 +728,8 @@ mo::parsePartial() {
 # The destination value will be an array
 #     [0] = the result text ($2)
 #     [1] = remaining content to parse, excluding the closing delimiter (nothing)
-#     [2] = Unparsed content outside of the block (the remainder)
+#     [2] = standalone content trick
+#     [3] = unparsed content outside of the block (the remainder)
 #
 # Returns nothing.
 mo::parseCloseTag() {
@@ -714,6 +748,9 @@ mo::parseCloseTag() {
     if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
         mo::standaloneProcessBefore moPrevious "$moPrevious"
         mo::standaloneProcessAfter moContent "$moContent"
+        moStandaloneContent=$'\n'
+    else
+        moStandaloneContent=""
     fi
 
     if [[ -n "$moCurrentBlock" ]] && [[ "${moArgs[2]}" != "$moCurrentBlock" ]]; then
@@ -722,7 +759,7 @@ mo::parseCloseTag() {
         mo::error "Unexpected close tag: ${moArgs[2]}"
     fi
 
-    local "$1" && mo::indirectArray "$1" "$moPrevious" "" "$moContent"
+    local "$1" && mo::indirectArray "$1" "$moPrevious" "" "$moStandaloneContent" "$moContent"
 }
 
 
@@ -737,6 +774,7 @@ mo::parseCloseTag() {
 # The destination value will be an array
 #     [0] = the result text
 #     [1] = remaining content to parse, excluding the closing delimiter
+#     [2] = standalone content trick
 #
 # Returns nothing
 mo::parseComment() {
@@ -752,9 +790,12 @@ mo::parseComment() {
     if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
         mo::standaloneProcessBefore moPrevious "$moPrevious"
         mo::standaloneProcessAfter moContent "$moContent"
+        moStandaloneContent=$'\n'
+    else
+        moStandaloneContent=""
     fi
 
-    local "$1" && mo::indirectArray "$1" "$moPrevious" "$moContent"
+    local "$1" && mo::indirectArray "$1" "$moPrevious" "$moContent" "$moStandaloneContent"
 }
 
 
@@ -769,8 +810,9 @@ mo::parseComment() {
 # The destination value will be an array
 #     [0] = the result text
 #     [1] = remaining content to parse, excluding the closing delimiter
-#     [2] = new open delimiter
-#     [3] = new close delimiter
+#     [2] = standalone content trick
+#     [3] = new open delimiter
+#     [4] = new close delimiter
 #
 # Returns nothing
 mo::parseDelimiter() {
@@ -790,9 +832,12 @@ mo::parseDelimiter() {
     if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
         mo::standaloneProcessBefore moPrevious "$moPrevious"
         mo::standaloneProcessAfter moContent "$moContent"
+        moStandaloneContent=$'\n'
+    else
+        moStandaloneContent=""
     fi
 
-    local "$1" && mo::indirectArray "$1" "$moPrevious" "$moContent" "$moOpen" "$moClose"
+    local "$1" && mo::indirectArray "$1" "$moPrevious" "$moContent" "$moStandaloneContent" "$moOpen" "$moClose"
 }
 
 
@@ -809,6 +854,7 @@ mo::parseDelimiter() {
 # The destination value will be an array
 #     [0] = the result text
 #     [1] = remaining content to parse, excluding the closing delimiter
+#     [2] = standalone content trick
 #
 # Returns nothing
 mo::parseValue() {
@@ -838,7 +884,7 @@ mo::parseValue() {
 
     moContent=${moContent:${#moCloseDelimiter}}
 
-    local "$1" && mo::indirectArray "$1" "$moPrevious$moResult" "$moContent"
+    local "$1" && mo::indirectArray "$1" "$moPrevious$moResult" "$moContent" ""
 }
 
 
@@ -1161,9 +1207,16 @@ mo::isArray() {
 #
 # $1 - Variable name to check.
 #
+# Can not use logic like this in case invalid variable names are passed.
+#     [[ "${!1-a}" == "${!1-b}" ]]
+#
 # Returns true (0) if the variable is set, 1 if the variable is unset.
 mo::isVarSet() {
-    [[ "${!1-a}" == "${!1-b}" ]]
+    if ! declare -p "$1" &> /dev/null; then
+        return 1
+    fi
+
+    return 0
 }
 
 
@@ -1191,9 +1244,11 @@ mo::isTruthy() {
     # false     false    false
     # false     true     true
     if [[ "$moTruthy" == "$2" ]]; then
+        mo::debug "Value is falsy, test result: $moTruthy inverse: $2"
         return 1
     fi
 
+    mo::debug "Value is truthy, test result: $moTruthy inverse: $2"
     return 0
 }
 
@@ -1385,7 +1440,7 @@ moJoin() {
 #
 # Returns nothing.
 mo::evaluateFunction() {
-    local moArgs moContent moFunctionArgs moFunctionResult moTarget moFunction moArgsSafe moTemp
+    local moArgs moContent moFunctionArgs moFunctionResult moTarget moFunction moTemp moFunctionCall
 
     moTarget=$1
     moContent=$2
@@ -1399,17 +1454,20 @@ mo::evaluateFunction() {
         shift 2
     done
 
+    mo::escape moFunctionCall "$moFunction"
+
     # shellcheck disable=SC2031
     if [[ -n "${MO_ALLOW_FUNCTION_ARGUMENTS-}" ]]; then
-        # Intentionally remove all function arguments
-        # shellcheck disable=SC2206
-        moArgsSafe=()
-    else
-        moArgsSafe=(${moArgs[@]+"${moArgs[@]}"})
+        mo::debug "Function arguments are allowed"
+
+        for moTemp in "${moArgs[@]}"; do
+            mo::escape moTemp "$moTemp"
+            moFunctionCall="$moFunctionCall $moTemp"
+        done
     fi
 
-    mo::debug "Calling function: $moFunction ${moArgs[*]}"
-    moContent=$(echo -n "$moContent" | MO_FUNCTION_ARGS=(${moArgs[@]+"${moArgs[@]}"}) eval "$moFunction" ${moArgsSafe[@]+"${moArgsSafe[@]}"}) || {
+    mo::debug "Calling function: $moFunctionCall"
+    moContent=$(export MO_FUNCTION_ARGS=("${moArgs[@]}"); echo -n "$moContent" | eval "$moFunctionCall") || {
         moFunctionResult=$?
         # shellcheck disable=SC2031
         if [[ -n "${MO_FAIL_ON_FUNCTION-}" && "$moFunctionResult" != 0 ]]; then
@@ -1418,7 +1476,7 @@ mo::evaluateFunction() {
     }
 
     # shellcheck disable=SC2031
-    local "$1" && mo::indirect "$1" "$moContent"
+    local "$moTarget" && mo::indirect "$moTarget" "$moContent"
 }
 
 
@@ -1521,6 +1579,63 @@ mo::standaloneProcessAfter() {
     moContent=${moContent#$moN}
 
     local "$1" && mo::indirect "$1" "$moContent"
+}
+
+
+# Internal: Apply indentation before any line that has content
+#
+# $1 - Destination variable
+# $2 - The content to indent
+# $3 - The indentation string
+#
+# Returns nothing.
+mo::indentLines() {
+    local moContent moIndentation moResult moN moR moChunk
+
+    moContent=$2
+    moIndentation=$3
+    moResult=""
+    moN=$'\n'
+    moR=$'\r'
+
+    if [[ -z "$moIndentation" ]] || [[ -z "$moContent" ]]; then
+        mo::debug "Not applying indentation, indentation ${#moIndentation} bytes, content ${#moContent} bytes"
+        moResult=$moContent
+    else
+        mo::debug "Applying indentation: '${moIndentation}'"
+
+        while [[ -n "$moContent" ]]; do
+            moChunk=${moContent%%$moN*}
+            moChunk=${moChunk%%$moR*}
+            moContent=${moContent:${#moChunk}}
+
+            if [[ -n "$moChunk" ]]; then
+                moResult="$moResult$moIndentation$moChunk"
+            fi
+
+            moResult="$moResult${moContent:0:1}"
+            moContent=${moContent:1}
+        done
+    fi
+
+    local "$1" && mo::indirect "$1" "$moResult"
+}
+
+
+# Internal: Escape a value
+#
+# $1 - Destination variable name
+# $2 - Value to escape
+#
+# Returns nothing
+mo::escape() {
+    local moResult
+
+    moResult=$2
+    moResult=$(declare -p moResult)
+    moResult=${moResult#*=}
+
+    local "$1" && mo::indirect "$1" "$moResult"
 }
 
 

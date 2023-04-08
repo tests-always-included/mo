@@ -32,6 +32,8 @@ Options:
    -s=FILE, --source=FILE
          Load FILE into the environment before processing templates.
          Can be used multiple times.
+   -d, --debug
+         Enable debug logging to stderr.
 
 MO_VERSION=3.0.0
 EOF
