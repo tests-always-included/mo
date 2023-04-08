@@ -3,6 +3,25 @@
 const exec = require("child_process").exec;
 const fsPromises = require("fs").promises;
 
+// Skip or override portions of tests. The goal is to still have as much
+// coverage as possible, but skip things that Bash does not support.
+//
+// To skip a test, define a "skip" property and explain why the test is
+// skipped.
+//
+// To override any test property, just define that property.
+const testOverrides = {
+    'Lambdas -> Escaping': {
+        skip: 'HTML escaping is not supported'
+    },
+    'Interpolation -> Implicit Iterators - HTML Escaping': {
+        skip: 'HTML escaping is not supported'
+    },
+    'Interpolation -> HTML Escaping': {
+        skip: 'HTML escaping is not supported'
+    }
+};
+
 function specFileToName(file) {
     return file
         .replace(/.*\//, "")
@@ -70,20 +89,20 @@ function addToEnvironmentArray(name, value) {
 }
 
 function addToEnvironmentObject(name, value) {
-    // Sometimes the __tag__ property of the code in the lambdas may
-    // be missing.  :-(
-    if (
-        (value && value.__tag__ === "code") ||
-        (value.ruby && value.php && value.perl)
-    ) {
-        if (value.bash) {
-            return `${name}() { ${value.bash}; }`;
+    if (value) {
+        // Sometimes the __tag__ property of the code in the lambdas may be
+        // missing.  :-(
+        if (
+            (value.__tag__ === "code") ||
+            (value.ruby && value.php && value.perl)
+        ) {
+            if (value.bash) {
+                return `${name}() { ${value.bash}; }`;
+            }
+
+            return `${name}() { perl -e 'print ((${value.perl})->("'"$1"'"))'; }`;
         }
 
-        return `${name}() { perl -e 'print ((${value.perl})->("'"$1"'"))'; }`;
-    }
-
-    if (value) {
         return `#${name} is an object and will not work in Bash`;
     }
 
@@ -96,7 +115,7 @@ function addToEnvironment(name, value) {
         return addToEnvironmentArray(name, value);
     }
 
-    if (typeof value === "object" && value) {
+    if (typeof value === "object") {
         return addToEnvironmentObject(name, value);
     }
 
@@ -176,28 +195,47 @@ function detectFailure(test) {
     return false;
 }
 
-function showFailureDetails(testSet, test) {
-    if (!test.isFailure) {
-        return;
-    }
-
-    console.log(`FAILURE: ${testSet.name} -> ${test.name}`)
+function showFailureDetails(test) {
+    console.log(`FAILURE: ${test.fullName}`);
     console.log('');
     console.log(test.desc);
     console.log('');
-    console.log(test);
+    console.log(JSON.stringify(test, null, 4));
+}
+
+function applyTestOverrides(test) {
+    const overrides = testOverrides[test.fullName] || {};
+
+    for (const [key, value] of Object.entries(overrides)) {
+        test[key] = value;
+    }
 }
 
 function runTest(testSet, test) {
     test.script = buildScript(test);
     test.partials = test.partials || {};
-    debug('Running test:', testSet.name, "->", test.name);
+    test.fullName = `${testSet.name} -> ${test.name}`;
+
+    applyTestOverrides(test);
+
+    if (test.skip) {
+        debug('Skipping test:', testSet.fullName, `$(${test.skip})`);
+
+        return Promise.resolve();
+    }
+
+    debug('Running test:', testSet.fullName);
 
     return setupEnvironment(test)
         .then(() => executeScript(test))
         .then(cleanup)
-        .then(() => test.isFailure = detectFailure(test))
-        .then(() => showFailureDetails(testSet, test));
+        .then(() => {
+            test.isFailure = detectFailure(test);
+
+            if (test.isFailure) {
+                showFailureDetails(test);
+            }
+        });
 }
 
 function processSpecFile(filename) {
@@ -212,15 +250,18 @@ function processSpecFile(filename) {
         ).then(() => {
             testSet.pass = 0;
             testSet.fail = 0;
+            testSet.skip = 0;
 
             for (const test of testSet.tests) {
                 if (test.isFailure) {
                     testSet.fail += 1;
+                } else if (test.skip) {
+                    testSet.skip += 1;
                 } else {
                     testSet.pass += 1;
                 }
             }
-            console.log(`### ${testSet.name} Results = ${testSet.pass} pass, ${testSet.fail} fail`);
+            console.log(`### ${testSet.name} Results = ${testSet.pass} passed, ${testSet.fail} failed, ${testSet.skip} skipped`);
 
             return testSet;
         });
@@ -239,15 +280,28 @@ processArraySequentially(process.argv.slice(2), processSpecFile).then(
         console.log('');
         console.log('Failed Test Summary');
         console.log('');
+        let pass = 0, fail = 0, skip = 0, total = 0;
 
         for (const testSet of result) {
-            console.log(`* ${testSet.name}: ${testSet.tests.length} total, ${testSet.pass} pass, ${testSet.fail} fail`);
+            pass += testSet.pass;
+            fail += testSet.fail;
+            skip += testSet.skip;
+            total += testSet.tests.length;
+
+            console.log(`* ${testSet.name}: ${testSet.tests.length} total, ${testSet.pass} pass, ${testSet.fail} fail, ${testSet.skip} skip`);
 
             for (const test of testSet.tests) {
                 if (test.isFailure) {
                     console.log(`    * Failure: ${test.name}`);
                 }
             }
+        }
+
+        console.log('');
+        console.log(`Final result: ${total} total, ${pass} pass, ${fail} fail, ${skip} skip`);
+
+        if (fail) {
+            process.exit(1);
         }
     },
     (err) => {

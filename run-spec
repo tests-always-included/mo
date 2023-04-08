@@ -10,6 +10,13 @@ else
     )
 fi
 
+if [[ "$BASH_VERSION" == 3.* ]]; then
+    echo "WARNING! Specs assume you are using a version of Bash with associative arrays!"
+fi
+
 # Actually run the specs
 node run-spec.js spec/specs/*.json
 
+if [[ "$BASH_VERSION" == 3.* ]]; then
+    echo "Some tests may have failed because they assume Bash supports associative arays"
+fi
