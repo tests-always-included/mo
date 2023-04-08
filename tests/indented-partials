@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+thisIsTrue=true
+template() {
+    cat <<EOF
+With spacing
+    {{> fixtures/indented-partials.partial}}
+
+    {{> fixtures/indented-partials.partial}}
+
+Without spacing
+    {{> fixtures/indented-partials.partial}}
+    {{> fixtures/indented-partials.partial}}
+
+With text
+    {{> fixtures/indented-partials.partial}}
+    text
+    {{> fixtures/indented-partials.partial}}
+
+In a conditional
+{{#thisIsTrue}}
+    {{> fixtures/indented-partials.partial}}
+{{/thisIsTrue}}
+EOF
+}
+expected() {
+    cat <<EOF
+With spacing
+    first line
+    second line
+
+    first line
+    second line
+
+Without spacing
+    first line
+    second line
+    first line
+    second line
+
+With text
+    first line
+    second line
+    text
+    first line
+    second line
+
+In a conditional
+    first line
+    second line
+EOF
+}
+
+runTest

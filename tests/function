@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+name=Willy
+wrapped() {
+    # This eats the newline in the content
+    echo "<b>$(cat)</b>"
+}
+template() {
+    cat <<EOF
+{{#wrapped}}
+  {{name}} is awesome.
+{{/wrapped}}
+... this is the last line.
+EOF
+}
+expected() {
+    cat <<EOF
+<b>  Willy is awesome.</b>... this is the last line.
+EOF
+}
+
+runTest

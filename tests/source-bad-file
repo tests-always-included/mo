@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+arguments=(--source=invalid)
+returnCode=1
+template="Do not display this"
+expected() {
+    cat <<EOF
+No such file: invalid
+EOF
+}
+
+runTest

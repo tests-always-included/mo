@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+thing="Wor"
+thing2="ks"
+template="{{thing thing2}}"
+expected="Works"
+
+runTest

@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+USER=j.doe
+ADMIN=false
+MO_FALSE_IS_EMPTY=yeppers
+template() {
+    cat <<EOF
+The user {{USER}} exists.
+{{#ADMIN}}
+WRONG - should not be an admin.
+{{/ADMIN}}
+EOF
+}
+expected() {
+    cat <<EOF
+The user j.doe exists.
+EOF
+}
+
+runTest

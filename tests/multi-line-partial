@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+multilineData=$'line 1\nline 2'
+template() {
+    cat <<EOF
+Partial:
+
+{{> fixtures/multi-line-partial.partial}}
+
+Indented:
+
+    {{> fixtures/multi-line-partial.partial}}
+EOF
+}
+expected() {
+    cat <<EOF
+Partial:
+
+line 1
+line 2
+
+Indented:
+
+    line 1
+    line 2
+EOF
+}
+
+runTest

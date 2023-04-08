@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+NAME="Chris"
+VALUE=10000
+TAXED_VALUE=6000
+IN_CA=true
+template() {
+    cat <<EOF
+Hello {{NAME}}
+You have just won {{VALUE}} dollars!
+{{#IN_CA}}
+Well, {{TAXED_VALUE}} dollars, after taxes.
+{{/IN_CA}}
+EOF
+}
+expected() {
+    cat <<EOF
+Hello Chris
+You have just won 10000 dollars!
+Well, 6000 dollars, after taxes.
+EOF
+}
+
+runTest

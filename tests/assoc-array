@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+declare -A repo
+repo[resque]="Resque"
+repo[hub]="Hub"
+repo[rip]="Rip"
+template() {
+    cat <<EOF
+{{#repo}}
+  <b>{{@key}} - {{.}}</b>
+{{/repo}}
+EOF
+}
+expected() {
+    cat <<EOF
+  <b>hub - Hub</b>
+  <b>rip - Rip</b>
+  <b>resque - Resque</b>
+EOF
+}
+
+runTest

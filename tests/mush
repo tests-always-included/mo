@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+USER=jwerle
+GENDER=male
+THING=apple
+COLOR=red
+PERSON=tobi
+ADJECTIVE=cool
+template() {
+    cat <<EOF
+{{! this is a comment }}
+
+{{USER}} is {{GENDER}}
+{{THING}} is {{COLOR}}
+{{PERSON}} is {{ADJECTIVE}}
+{{USER}} is friends with {{PERSON}}
+{{var}} {{value}}
+EOF
+}
+expected() {
+    cat <<EOF
+
+jwerle is male
+apple is red
+tobi is cool
+jwerle is friends with tobi
+ 
+EOF
+}
+
+runTest

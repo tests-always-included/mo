@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+person=""
+template=""
+arguments=(--something)
+expected() {
+    cat <<EOF
+cat: --something: No such file or directory
+EOF
+}
+
+runTest

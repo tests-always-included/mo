@@ -189,6 +189,21 @@ myfunc() {
 ```
 
 
+Environment Variables and Functions
+-----------------------------------
+
+There are several functions and variables used to process templates. `mo` reserves variables that start with `MO_` for variables exposing data or configuration, functions starting with `mo::`, and local variables starting with `mo[A-Z]`. You are welcome to use internal functions, though only ones that are marked as "Public" should not change their interface. Scripts may also read any of the variables.
+
+* `MO_ALLOW_FUNCTION_ARGUMENTS` - When set to a non-empty value, this allows functions referenced in templates to receive additional options and arguments. This puts the content from the template directly into an eval statement. Use with extreme care.
+* `MO_DEBUG` - When set to a non-empty value, additional debug information is written to stderr.
+* `MO_FUNCTION_ARGS` - Arguments passed to the function.
+* `MO_FAIL_ON_FUNCTION` - If a function returns a non-zero status code, abort with an error.
+* `MO_FAIL_ON_UNSET` - When set to a non-empty value, expansion of an unset env variable will be aborted with an error.
+* `MO_FALSE_IS_EMPTY` - When set to a non-empty value, the string "false" will be treated as an empty value for the purposes of conditionals.
+* `MO_ORIGINAL_COMMAND` - Used to find the `mo` program in order to generate a help message.
+* `MO_VERSION` - Version of `mo`.
+
+
 Concessions
 -----------
 
@@ -200,9 +215,8 @@ Pull requests to solve the following issues would be helpful.
 ### Mustache Syntax
 
 * Dotted names are supported but only for associative arrays (Bash 4).  See [`demo/associative-arrays`](demo/associative-arrays) for an example.
-* There's no "top level" object, so `echo '{.}' | ./mo` does not do anything useful.  In other languages you can say the data for the template is a string and in `mo` the data is always the environment.  Luckily this type of usage is rare and `{.}` works great when iterating over an array.
+* There's no "top level" object, so `echo '{{.}}' | ./mo` does not do anything useful.  In other languages you can say the data for the template is a string and in `mo` the data is always the environment.  Luckily this type of usage is rare and `{{.}}` works great when iterating over an array.
 * HTML encoding is not built into `mo`.  `{{{var}}}`, `{{&var}}` and `{{var}}` all do the same thing.  `echo '{{TEST}}' | TEST='<b>' mo` will give you "`<b>`" instead of "`&gt;b&lt;`".
-* You can not change the delimiters.
 
 
 ### General Scripting Issues

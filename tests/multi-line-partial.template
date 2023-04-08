@@ -1,7 +1,0 @@
-Partial:
-
-{{> multi-line-partial.partial}}
-
-Indented:
-
-    {{> multi-line-partial.partial}}

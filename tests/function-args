@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+name=Willy
+MO_ALLOW_FUNCTION_ARGUMENTS=true
+
+pipeTo() {
+    cat | "$1"
+}
+
+testArgs() {
+    printf "%d" "$#"
+
+    # Display all arguments
+    printf " %q" ${@+"$@"}
+}
+template() {
+    cat <<EOF
+No args: {{testArgs}} - done
+One arg: {{testArgs one}} - done
+Getting name in a string: {{testArgs "The name is $name"}} - done
+Reverse this: {{#pipeTo rev}}abcde{{/pipeTo}}
+EOF
+}
+expected() {
+    cat <<EOF
+No args: 0 '' - done
+One arg: 1 one - done
+Getting name in a string: 1 The\ name\ is\ Willy - done
+Reverse this: edcba
+EOF
+}
+
+runTest

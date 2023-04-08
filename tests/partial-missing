@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+returnCode=1
+person=""
+template() {
+    cat <<EOF
+Won't be there: {{> fixtures/partial-missing.partial}}
+EOF
+}
+expected() {
+    cat <<EOF
+cat: partial-missing.partial: No such file or directory
+EOF
+}
+
+runTest

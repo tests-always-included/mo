@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+arguments=(--source=fixtures/source.vars)
+template() {
+    cat <<EOF
+{{VAR}}
+{{#ARR}}
+* {{.}}
+{{/ARR}}
+{{ASSOC_ARR.a}} {{ASSOC_ARR.b}}
+EOF
+}
+expected() {
+    cat <<EOF
+value
+* 1
+* 2
+* 3
+AAA BBB
+EOF
+}
+
+runTest

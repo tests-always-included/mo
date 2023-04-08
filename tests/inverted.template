@@ -1,6 +1,0 @@
-{{#repo}}
-  <b>{{.}}</b>
-{{/repo}}
-{{^repo}}
-  No repos :(
-{{/repo}}

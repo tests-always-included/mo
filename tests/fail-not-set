@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+unset __NO_SUCH_VAR
+POPULATED="words"
+EMPTY=""
+arguments=(--fail-not-set)
+returnCode=1
+
+template() {
+    cat <<EOF
+Populated: {{POPULATED}};
+Empty: {{EMPTY}};
+Unset: {{__NO_SUCH_VAR}};
+EOF
+}
+expected() {
+    cat <<EOF
+ERROR: Environment variable not set: __NO_SUCH_VAR
+EOF
+}
+
+runTest

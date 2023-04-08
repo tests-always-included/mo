@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+names=( "Tyler" )
+template() {
+    cat <<EOF
+<h2>Names</h2>
+{{#names}}
+  {{> partial.partial}}
+{{/names}}
+EOF
+}
+expected() {
+    cat <<EOF
+<h2>Names</h2>
+  <strong>Tyler</strong>
+
+EOF
+}
+
+runTest

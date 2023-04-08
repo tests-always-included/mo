@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+person=""
+template() {
+    cat <<EOF
+Shown.
+{{#person}}
+  Never shown!
+{{/person}}
+EOF
+}
+expected() {
+    cat <<EOF
+Shown.
+EOF
+}
+
+runTest

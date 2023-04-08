@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+name="Chris"
+company="<b>GitHub</b>"
+template() {
+    cat <<EOF
+* .{{name}}.
+* .{{age}}.
+* .{{company}}.
+* .{{{company}}}.
+EOF
+}
+expected() {
+    cat <<EOF
+* .Chris.
+* ..
+* .<b>GitHub</b>.
+* .<b>GitHub</b>.
+EOF
+}
+
+runTest

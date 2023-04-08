@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+failFunction() {
+    false
+}
+arguments=(--fail-on-function)
+returnCode=1
+
+template="Fail on function? {{failFunction}}"
+expected() {
+    cat <<EOF
+ERROR: Function 'failFunction' with args () failed with status code 1
+EOF
+}
+
+runTest

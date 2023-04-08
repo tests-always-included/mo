@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+STR=abc
+DATA=(111 222)
+template() {
+    cat <<EOF
+Issue #7
+{{STR}}
+{{#DATA}}
+    Item: {{.}}
+    String: {{STR}}
+{{/DATA}}
+EOF
+}
+expected() {
+    cat <<EOF
+Issue #7
+abc
+    Item: 111
+    String: abc
+    Item: 222
+    String: abc
+EOF
+}
+
+runTest

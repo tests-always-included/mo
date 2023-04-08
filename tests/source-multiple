@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+arguments=(--source=fixtures/source-multiple-1.vars --source=fixtures/source-multiple-2.vars)
+template() {
+    cat <<EOF
+A: {{A}}
+B: {{B}}
+C: {{C}}
+EOF
+}
+expected() {
+    cat <<EOF
+A: from1
+B: from2
+C: from2
+EOF
+}
+
+runTest

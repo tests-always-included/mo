@@ -26,6 +26,8 @@
 #/    -s=FILE, --source=FILE
 #/          Load FILE into the environment before processing templates.
 #/          Can be used multiple times.
+#/    -d, --debug
+#/          Enable debug logging to stderr.
 #
 # Mo is under a MIT style licence with an additional non-advertising clause.
 # See LICENSE.md for the full text.
@@ -86,7 +88,9 @@
 #                  options and arguments. This puts the content from the
 #                  template directly into an eval statement. Use with extreme
 #                  care.
-# MO_FUNCTION_ARGS - Arguments passed to the function
+# MO_DEBUG - When set to a non-empty value, additional debug information is
+#                  written to stderr.
+# MO_FUNCTION_ARGS - Arguments passed to the function.
 # MO_FAIL_ON_FUNCTION - If a function returns a non-zero status code, abort
 #                  with an error.
 # MO_FAIL_ON_UNSET - When set to a non-empty value, expansion of an unset env
@@ -98,24 +102,26 @@
 #
 # Returns nothing.
 mo() (
-    # This function executes in a subshell so IFS is reset.
-    # Namespace this variable so we don't conflict with desired values.
-    local moContent f2source files doubleHyphens
+    local moContent moSource moFiles moDoubleHyphens moResult
 
+    # This function executes in a subshell; IFS is reset at the end.
     IFS=$' \n\t'
-    files=()
-    doubleHyphens=false
+
+    # Enable a strict mode. This is also reset at the end.
+    set -eEu -o pipefail
+    moFiles=()
+    moDoubleHyphens=false
 
     if [[ $# -gt 0 ]]; then
         for arg in "$@"; do
-            if $doubleHyphens; then
+            if $moDoubleHyphens; then
                 #: After we encounter two hyphens together, all the rest
                 #: of the arguments are files.
-                files=("${files[@]}" "$arg")
+                moFiles=(${moFiles[@]+"${moFiles[@]}"} "$arg")
             else
                 case "$arg" in
                     -h|--h|--he|--hel|--help|-\?)
-                        moUsage "$0"
+                        mo::usage "$0"
                         exit 0
                         ;;
 
@@ -141,197 +147,95 @@ mo() (
 
                     -s=* | --source=*)
                         if [[ "$arg" == --source=* ]]; then
-                            f2source="${arg#--source=}"
+                            moSource="${arg#--source=}"
                         else
-                            f2source="${arg#-s=}"
+                            moSource="${arg#-s=}"
                         fi
 
-                        if [[ -f "$f2source" ]]; then
+                        if [[ -f "$moSource" ]]; then
                             # shellcheck disable=SC1090
-                            . "$f2source"
+                            . "$moSource"
                         else
-                            echo "No such file: $f2source" >&2
+                            echo "No such file: $moSource" >&2
                             exit 1
                         fi
                         ;;
 
+                    -d | --debug)
+                        MO_DEBUG=true
+                        ;;
+
                     --)
                         #: Set a flag indicating we've encountered double hyphens
-                        doubleHyphens=true
+                        moDoubleHyphens=true
                         ;;
 
                     *)
                         #: Every arg that is not a flag or a option should be a file
-                        files=(${files[@]+"${files[@]}"} "$arg")
+                        moFiles=(${moFiles[@]+"${moFiles[@]}"} "$arg")
                         ;;
                 esac
             fi
         done
     fi
 
-    moGetContent moContent "${files[@]}" || return 1
-    moParse "$moContent" "" true
+    mo::debug "Debug enabled"
+    mo::content moContent "${moFiles[@]}" || return 1
+    mo::parse moResult "$moContent" "" "" "{{" "}}" ""
+    echo -n "${moResult[0]}${moResult[1]}"
 )
 
 
-# Internal: Call a function.
+# Internal: Show a debug message
 #
-# $1 - Variable for output
-# $2 - Function to call
-# $3 - Content to pass
-# $4 - Additional arguments as a single string
-#
-# This can be dangerous, especially if you are using tags like
-# {{someFunction ; rm -rf / }}
+# $1 - The debug message to show
 #
 # Returns nothing.
-moCallFunction() {
-    local moArgs moContent moFunctionArgs moFunctionResult
-
-    moArgs=()
-    moTrimWhitespace moFunctionArgs "$4"
-
-    # shellcheck disable=SC2031
-    if [[ -n "${MO_ALLOW_FUNCTION_ARGUMENTS-}" ]]; then
-        # Intentionally bad behavior
-        # shellcheck disable=SC2206
-        moArgs=($4)
+mo::debug() {
+    if [[ -n "${MO_DEBUG:-}" ]]; then
+        echo "DEBUG: $1" >&2
     fi
+}
 
-    moContent=$(echo -n "$3" | MO_FUNCTION_ARGS="$moFunctionArgs" eval "$2" "${moArgs[@]}") || {
-        moFunctionResult=$?
-        # shellcheck disable=SC2031
-        if [[ -n "${MO_FAIL_ON_FUNCTION-}" && "$moFunctionResult" != 0 ]]; then
-            echo "Function '$2' with args (${moArgs[*]+"${moArgs[@]}"}) failed with status code $moFunctionResult"
-            exit "$moFunctionResult"
+
+# Internal: Show an error message and exit
+#
+# $1 - The error message to show
+#
+# Returns nothing. Exits the program.
+mo::error() {
+    echo "ERROR: $1" >&2
+    exit ${2:-1}
+}
+
+
+# Internal: Displays the usage for mo.  Pulls this from the file that
+# contained the `mo` function.  Can only work when the right filename
+# comes is the one argument, and that only happens when `mo` is called
+# with `$0` set to this file.
+#
+# $1 - Filename that has the help message
+#
+# Returns nothing.
+mo::usage() {
+    while read -r line; do
+        if [[ "${line:0:2}" == "#/" ]]; then
+            echo "${line:3}"
         fi
-    }
-
-    # shellcheck disable=SC2031
-    local "$1" && moIndirect "$1" "$moContent"
-}
-
-
-# Internal: Scan content until the right end tag is found.  Creates an array
-# with the following members:
-#
-#   [0] = Content before end tag
-#   [1] = End tag (complete tag)
-#   [2] = Content after end tag
-#
-# Everything using this function uses the "standalone tags" logic.
-#
-# $1 - Name of variable for the array
-# $2 - Content
-# $3 - Name of end tag
-# $4 - If -z, do standalone tag processing before finishing
-#
-# Returns nothing.
-moFindEndTag() {
-    local content remaining scanned standaloneBytes tag
-
-    #: Find open tags
-    scanned=""
-    moSplit content "$2" '{{' '}}'
-
-    while [[ "${#content[@]}" -gt 1 ]]; do
-        moTrimWhitespace tag "${content[1]}"
-
-        #: Restore content[1] before we start using it
-        content[1]='{{'"${content[1]}"'}}'
-
-        case $tag in
-            '#'* | '^'*)
-                #: Start another block
-                scanned="${scanned}${content[0]}${content[1]}"
-                moTrimWhitespace tag "${tag:1}"
-                moFindEndTag content "${content[2]}" "$tag" "loop"
-                scanned="${scanned}${content[0]}${content[1]}"
-                remaining=${content[2]}
-                ;;
-
-            '/'*)
-                #: End a block - could be ours
-                moTrimWhitespace tag "${tag:1}"
-                scanned="$scanned${content[0]}"
-
-                if [[ "$tag" == "$3" ]]; then
-                    #: Found our end tag
-                    if [[ -z "${4-}" ]] && moIsStandalone standaloneBytes "$scanned" "${content[2]}" true; then
-                        #: This is also a standalone tag - clean up whitespace
-                        #: and move those whitespace bytes to the "tag" element
-                        # shellcheck disable=SC2206
-                        standaloneBytes=( $standaloneBytes )
-                        content[1]="${scanned:${standaloneBytes[0]}}${content[1]}${content[2]:0:${standaloneBytes[1]}}"
-                        scanned="${scanned:0:${standaloneBytes[0]}}"
-                        content[2]="${content[2]:${standaloneBytes[1]}}"
-                    fi
-
-                    local "$1" && moIndirectArray "$1" "$scanned" "${content[1]}" "${content[2]}"
-                    return 0
-                fi
-
-                scanned="$scanned${content[1]}"
-                remaining=${content[2]}
-                ;;
-
-            *)
-                #: Ignore all other tags
-                scanned="${scanned}${content[0]}${content[1]}"
-                remaining=${content[2]}
-                ;;
-        esac
-
-        moSplit content "$remaining" '{{' '}}'
-    done
-
-    #: Did not find our closing tag
-    scanned="$scanned${content[0]}"
-    local "$1" && moIndirectArray "$1" "${scanned}" "" ""
-}
-
-
-# Internal: Find the first index of a substring.  If not found, sets the
-# index to -1.
-#
-# $1 - Destination variable for the index
-# $2 - Haystack
-# $3 - Needle
-#
-# Returns nothing.
-moFindString() {
-    local pos string
-
-    string=${2%%"$3"*}
-    [[ "$string" == "$2" ]] && pos=-1 || pos=${#string}
-    local "$1" && moIndirect "$1" "$pos"
-}
-
-
-# Internal: Generate a dotted name based on current context and target name.
-#
-# $1 - Target variable to store results
-# $2 - Context name
-# $3 - Desired variable name
-#
-# Returns nothing.
-moFullTagName() {
-    if [[ -z "${2-}" ]] || [[ "$2" == *.* ]]; then
-        local "$1" && moIndirect "$1" "$3"
-    else
-        local "$1" && moIndirect "$1" "${2}.${3}"
-    fi
+    done < <(cat "$MO_ORIGINAL_COMMAND")
+    echo ""
+    echo "MO_VERSION=$MO_VERSION"
 }
 
 
 # Internal: Fetches the content to parse into a variable.  Can be a list of
 # partials for files or the content from stdin.
 #
-# $1   - Variable name to assign this content back as
-# $2-@ - File names (optional)
+# $1   - Target variable to store results
+# $2-@ - File names (optional), read from stdin otherwise
 #
 # Returns nothing.
-moGetContent() {
+mo::content() {
     local moContent moFilename moTarget
 
     moTarget=$1
@@ -340,87 +244,39 @@ moGetContent() {
         moContent=""
 
         for moFilename in "$@"; do
+            mo::debug "Using template to load content from file: $moFilename"
             #: This is so relative paths work from inside template files
             moContent="$moContent"'{{>'"$moFilename"'}}'
         done
     else
-        moLoadFile moContent || return 1
+        mo::debug "Will read content from stdin"
+        mo::contentFile moContent || return 1
     fi
 
-    local "$moTarget" && moIndirect "$moTarget" "$moContent"
+    local "$moTarget" && mo::indirect "$moTarget" "$moContent"
 }
 
 
-# Internal: Indent a string, placing the indent at the beginning of every
-# line that has any content.
+# Internal: Read a file into a variable.
 #
-# $1 - Name of destination variable to get an array of lines
-# $2 - The indent string
-# $3 - The string to reindent
+# $1 - Variable name to receive the file's content
+# $2 - Filename to load - if empty, defaults to /dev/stdin
 #
 # Returns nothing.
-moIndentLines() {
-    local content fragment len posN posR result trimmed
+mo::contentFile() {
+    local moContent moLen
 
-    result=""
+    # The subshell removes any trailing newlines.  We forcibly add
+    # a dot to the content to preserve all newlines.
+    # As a future optimization, it would be worth considering removing
+    # cat and replacing this with a read loop.
 
-    #: Remove the period from the end of the string.
-    len=$((${#3} - 1))
-    content=${3:0:$len}
+    mo::debug "Loading content: ${2:-/dev/stdin}"
+    moContent=$(cat -- "${2:-/dev/stdin}" && echo '.') || return 1
+    moLen=$((${#moContent} - 1))
+    moContent=${moContent:0:$moLen}  # Remove last dot
 
-    if [[ -z "${2-}" ]]; then
-        local "$1" && moIndirect "$1" "$content"
-
-        return 0
-    fi
-
-    moFindString posN "$content" $'\n'
-    moFindString posR "$content" $'\r'
-
-    while [[ "$posN" -gt -1 ]] || [[ "$posR" -gt -1 ]]; do
-        if [[ "$posN" -gt -1 ]]; then
-            fragment="${content:0:$posN + 1}"
-            content=${content:$posN + 1}
-        else
-            fragment="${content:0:$posR + 1}"
-            content=${content:$posR + 1}
-        fi
-
-        moTrimChars trimmed "$fragment" false true " " $'\t' $'\n' $'\r'
-
-        if [[ -n "$trimmed" ]]; then
-            fragment="$2$fragment"
-        fi
-
-        result="$result$fragment"
-
-        moFindString posN "$content" $'\n'
-        moFindString posR "$content" $'\r'
-
-        # If the content ends in a newline, do not indent.
-        if [[ "$posN" -eq ${#content} ]]; then
-            # Special clause for \r\n
-            if [[ "$posR" -eq "$((posN - 1))" ]]; then
-                posR=-1
-            fi
-
-            posN=-1
-        fi
-
-        if [[ "$posR" -eq ${#content} ]]; then
-            posR=-1
-        fi
-    done
-
-    moTrimChars trimmed "$content" false true " " $'\t'
-
-    if [[ -n "$trimmed" ]]; then
-        content="$2$content"
-    fi
-
-    result="$result$content"
-
-    local "$1" && moIndirect "$1" "$result"
+    local "$1" && mo::indirect "$1" "$moContent"
 }
 
 
@@ -432,13 +288,13 @@ moIndentLines() {
 # Examples
 #
 #   callFunc () {
-#       local "$1" && moIndirect "$1" "the value"
+#       local "$1" && mo::indirect "$1" "the value"
 #   }
 #   callFunc dest
 #   echo "$dest"  # writes "the value"
 #
 # Returns nothing.
-moIndirect() {
+mo::indirect() {
     unset -v "$1"
     printf -v "$1" '%s' "$2"
 }
@@ -453,13 +309,13 @@ moIndirect() {
 #
 #   callFunc () {
 #       local myArray=(one two three)
-#       local "$1" && moIndirectArray "$1" "${myArray[@]}"
+#       local "$1" && mo::indirectArray "$1" "${myArray[@]}"
 #   }
 #   callFunc dest
 #   echo "${dest[@]}" # writes "one two three"
 #
 # Returns nothing.
-moIndirectArray() {
+mo::indirectArray() {
     unset -v "$1"
 
     # IFS must be set to a string containing space or unset in order for
@@ -467,6 +323,806 @@ moIndirectArray() {
     # bash 3.  This is detailed further at
     # https://github.com/fidian/gg-core/pull/7
     eval "$(printf "IFS= %s=(\"\${@:2}\") IFS=%q" "$1" "$IFS")"
+}
+
+
+# Internal: Find the first index of a substring.  If not found, sets the
+# index to -1.
+#
+# $1 - Destination variable for the index
+# $2 - Haystack
+# $3 - Needle
+#
+# Returns nothing.
+mo::findString() {
+    local moPos moString
+
+    moString=${2%%"$3"*}
+    [[ "$moString" == "$2" ]] && moPos=-1 || moPos=${#moString}
+    local "$1" && mo::indirect "$1" "$moPos"
+}
+
+
+# Internal: Split a larger string into an array of at most 2 elements.
+#
+# $1 - Destination variable
+# $2 - String to split
+# $3 - Starting delimiter
+#
+# Returns nothing.
+mo::split() {
+    local moPos moResult
+
+    moResult=("$2")
+    mo::findString moPos "${moResult[0]}" "$3"
+
+    if [[ "$moPos" -ne -1 ]]; then
+        # The first delimiter was found
+        moResult[1]=${moResult[0]:$moPos + ${#3}}
+        moResult[0]=${moResult[0]:0:$moPos}
+    fi
+
+    local "$1" && mo::indirectArray "$1" "${moResult[@]}"
+}
+
+
+# Internal: Trim leading characters
+#
+# $1   - Name of destination variable
+# $2   - The string
+#
+# Returns nothing.
+mo::trim() {
+    local moContent moLast moR moN moT
+
+    moContent=$2
+    moLast=""
+    moR=$'\r'
+    moN=$'\n'
+    moT=$'\t'
+
+    while [[ "$moContent" != "$moLast" ]]; do
+        moLast=$moContent
+        moContent=${moContent# }
+        moContent=${moContent#$moR}
+        moContent=${moContent#$moN}
+        moContent=${moContent#$moT}
+    done
+
+    local "$1" && mo::indirect "$1" "$moContent"
+}
+
+
+# Internal: Remove whitespace and content after whitespace
+#
+# $1 - Name of the destination variable
+# $2 - The string to chomp
+#
+# Returns nothing.
+mo::chomp() {
+    local moTemp moR moN moT
+
+    moR=$'\r'
+    moN=$'\n'
+    moT=$'\t'
+    moTemp=${2%% *}
+    moTemp=${moTemp%%$moR*}
+    moTemp=${moTemp%%$moN*}
+    moTemp=${moTemp%%$moT*}
+
+    local "$1" && mo::indirect "$1" "$moTemp"
+}
+
+# Internal: Parse a block of text, writing the result to stdout. Interpolates
+# mustache tags.
+#
+# $1 - Destination variable name to send an array
+# $2 - Block of text to change
+# $3 - Current name (the variable NAME for what {{.}} means)
+# $4 - Current block name
+# $5 - Open delimiter ("{{")
+# $6 - Close delimiter ("}}")
+# $7 - Fast mode (skip to end of block) if non-empty
+#
+#
+# Array has the following elements
+#     [0] - Parsed content
+#     [1] - Unparsed content after the closing tag
+#
+# Returns nothing.
+mo::parse() {
+    local moContent moCurrent moOpenDelimiter moCloseDelimieter moResult moSplit moParseChunk moFastMode moStandaloneContent
+    moContent=$2
+    moCurrent=$3
+    moCurrentBlock=$4
+    moOpenDelimiter=$5
+    moCloseDelimiter=$6
+    moFastMode=$7
+    moResult=""
+    moRemainder=""
+
+    # This is a trick to make the standalone tag detection believe it's on a
+    # new line because there's no other way to easily tell the difference
+    # between a lone tag on a line and two tags where the first one evaluated
+    # to an empty string.
+    moStandaloneContent=$'\n'
+    mo::debug "Starting parse, current: $moCurrent, ending tag: $moCurrentBlock, fast: $moFastMode"
+
+    while [[ "${#moContent}" -gt 0 ]]; do
+        # Both escaped and unescaped content are treated the same.
+        mo::split moSplit "$moContent" "$moOpenDelimiter"
+
+        if [[ "${#moSplit[@]}" -gt 1 ]]; then
+            moResult="$moResult${moSplit[0]}"
+            moStandaloneContent="$moStandaloneContent${moSplit[0]}"
+            mo::trim moContent "${moSplit[1]}"
+
+            case $moContent in
+                '#'*)
+                    # Loop, if/then, or pass content through function
+                    mo::parseBlock moParseChunk "$moResult" "$moContent" "$moCurrent" "$moOpenDelimiter" "$moCloseDelimiter" false "$moStandaloneContent"
+                    ;;
+
+                '>'*)
+                    # Load partial - get name of file relative to cwd
+                    mo::parsePartial moParseChunk "$moResult" "$moContent" "$moCurrent" "$moCloseDelimiter" "$moFastMode" "$moStandaloneContent"
+                    ;;
+
+                '/'*)
+                    # Closing tag
+                    mo::parseCloseTag moParseChunk "$moResult" "$moContent" "$moCurrent" "$moCloseDelimiter" "$moCurrentBlock" "$moStandaloneContent"
+                    moRemainder=${moParseChunk[2]}
+                    ;;
+
+                '^'*)
+                    # Display section if named thing does not exist
+                    mo::parseBlock moParseChunk "$moResult" "$moContent" "$moCurrent" "$moOpenDelimiter" "$moCloseDelimiter" true "$moStandaloneContent"
+                    ;;
+
+                '!'*)
+                    # Comment - ignore the tag content entirely
+                    mo::parseComment moParseChunk "$moResult" "$moContent" "$moCloseDelimiter" "$moStandaloneContent"
+                ;;
+
+                '='*)
+                    # Change delimiters
+                    # Any two non-whitespace sequences separated by whitespace.
+                    mo::parseDelimiter moParseChunk "$moResult" "$moContent" "$moCloseDelimiter" "$moStandaloneContent"
+                    moOpenDelimiter=${moParseChunk[2]}
+                    moCloseDelimiter=${moParseChunk[3]}
+                    ;;
+
+                '&'*)
+                    # Unescaped - mo doesn't escape
+                    moContent=${moContent#&}
+                    mo::trim moContent "$moContent"
+                    mo::parseValue moParseChunk "$moResult" "$moContent" "$moCurrent" "$moOpenDelimiter" "$moCloseDelimiter" "$moFastMode"
+                    ;;
+
+                *)
+                    # Normal environment variable, string, subexpression,
+                    # current value, key, or function call
+                    mo::parseValue moParseChunk "$moResult" "$moContent" "$moCurrent" "$moOpenDelimiter" "$moCloseDelimiter" "$moFastMode"
+                    ;;
+            esac
+
+            moResult=${moParseChunk[0]}
+            moContent=${moParseChunk[1]}
+
+            # Do not employ the trick after the first tag gets processed (see above)
+            moStandaloneContent=''
+        else
+            moResult="$moResult$moContent"
+            moContent=""
+        fi
+    done
+
+    local "$1" && mo::indirectArray "$1" "$moResult" "$moRemainder"
+}
+
+
+# Internal: Handle parsing a block
+#
+# $1 - Destination variable name, will be set to an array
+# $2 - Previously parsed
+# $3 - Content
+# $4 - Current name (the variable NAME for what {{.}} means)
+# $5 - Open delimiter
+# $6 - Close delimiter
+# $7 - Invert condition ("true" or "false")
+# $8 - Standalone content
+#
+# The destination value will be an array
+#     [0] = the result text
+#     [1] = remaining content to parse, excluding the closing delimiter
+#
+# Returns nothing
+mo::parseBlock() {
+    local moContent moCurrent moOpenDelimiter moCloseDelimiter moInvertBlock moTag moArgs moTemp moParseResult moResult moPrevious moStandaloneContent moArrayName moArrayIndexes moArrayIndex
+
+    moPrevious=$2
+    mo::trim moContent "${3:1}"
+    moCurrent=$4
+    moOpenDelimiter=$5
+    moCloseDelimiter=$6
+    moInvertBlock=$7
+    moStandaloneContent=$8
+    mo::parseValueInner moArgs "$moContent" "$moCurrent" "$moCloseDelimiter"
+    moContent="${moArgs[0]#$moCloseDelimiter}"
+    moArgs=("${moArgs[@]:1}")
+    mo::debug "Parsing block: ${moArgs[*]}"
+
+    if [[ "${moArgs[0]}" == "NAME" ]] && mo::isFunction "${moArgs[1]}"; then
+        if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
+            mo::standaloneProcessBefore moPrevious "$moPrevious"
+            mo::standaloneProcessAfter moContent "$moContent"
+        fi
+
+        # Get contents of block after parsing
+        mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" ""
+
+        # Pass contents to function
+        mo::evaluateFunction moResult "${moParseResult[0]}" "${moArgs[@]:1}"
+        moContent=${moParseResult[1]}
+    elif [[ "${moArgs[0]}" == "NAME" ]] && mo::isArray "${moArgs[1]}"; then
+        # Need to interate across array for each element in the array.
+        if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
+            mo::standaloneProcessBefore moPrevious "$moPrevious"
+            mo::standaloneProcessAfter moContent "$moContent"
+        fi
+
+        moArrayName=${moArgs[1]}
+        eval "moArrayIndexes=(\"\${!${moArrayName}[@]}\")"
+
+        if [[ "${#moArrayIndexes[@]}" -lt 1 ]]; then
+            # No elements. Skip the block processing
+            mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-EMPTY"
+            moResult=""
+        else
+            moResult=""
+            # Process for each element in the array
+            for moArrayIndex in "${moArrayIndexes[@]}"; do
+                mo::debug "Iterate over array using element: $moArrayName.$moArrayIndex"
+                mo::parse moParseResult "$moContent" "$moArrayName.$moArrayIndex" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" ""
+                moResult="$moResult${moParseResult[0]}"
+            done
+        fi
+
+        moContent=${moParseResult[1]}
+    else
+        if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
+            mo::standaloneProcessBefore moPrevious "$moPrevious"
+            mo::standaloneProcessAfter moContent "$moContent"
+        fi
+
+        # Variable, value, or list of mixed things
+        mo::evaluateListOfSingles moResult "$moCurrent" "${moArgs[@]}"
+
+        if mo::isTruthy "$moResult" "$moInvertBlock"; then
+            mo::debug "Block is truthy: $moResult"
+            mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" ""
+        else
+            mo::debug "Block is falsy: $moResult"
+            mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-FALSY"
+            moParseResult[0]=""
+        fi
+
+        moResult=${moParseResult[0]}
+        moContent=${moParseResult[1]}
+    fi
+
+    local "$1" && mo::indirectArray "$1" "$moPrevious$moResult" "$moContent"
+}
+
+
+# Internal: Handle parsing a partial
+#
+# $1 - Destination variable name, will be set to an array
+# $2 - Previously parsed
+# $3 - Content
+# $4 - Current name (the variable NAME for what {{.}} means)
+# $5 - Close delimiter for the current tag
+# $6 - Fast mode (skip to end of block) if non-empty
+# $7 - Standalone content
+#
+# The destination value will be an array
+#     [0] = the result text
+#     [1] = remaining content to parse, excluding the closing delimiter
+#
+# Indentation should be applied to the entire partial's contents that are
+# returned. Adding indentation is outside the scope of this function.
+#
+# Returns nothing
+mo::parsePartial() {
+    local moContent moCurrent moCloseDelimiter moFilename moResult moFastMode moPrevious moStandaloneContent
+
+    moPrevious=$2
+    mo::trim moContent "${3:1}"
+    moCurrent=$4
+    moCloseDelimiter=$5
+    moFastMode=$6
+    moStandaloneContent=$7
+    mo::chomp moFilename "${moContent%%$moCloseDelimiter*}"
+    moContent="${moContent#*$moCloseDelimiter}"
+
+    if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
+        mo::standaloneProcessBefore moPrevious "$moPrevious"
+        mo::standaloneProcessAfter moContent "$moContent"
+    fi
+
+    if [[ -n "$moFastMode" ]]; then
+        moResult=""
+        moLen=0
+    else
+        mo::debug "Parsing partial: $moFilename"
+
+        # Execute in subshell to preserve current cwd and environment
+        moResult=$(
+            # It would be nice to remove `dirname` and use a function instead,
+            # but that is difficult when only given filenames.
+            cd "$(dirname -- "$moFilename")" || exit 1
+            echo "$(
+                mo::contentFile moResult "${moFilename##*/}" || exit 1
+
+                # Delimiters are reset when loading a new partial
+                mo::parse moResult "$moResult" "$moCurrent" "" "{{" "}}" ""
+
+                # Fix bash handling of subshells and keep trailing whitespace.
+                echo -n "${moResult[0]}${moResult[1]}."
+            )" || exit 1
+        ) || exit 1
+        moLen=${#moResult}
+
+        if [[ $moLen -gt 0 ]]; then
+            moLen=$((moLen - 1))
+        fi
+    fi
+
+    local "$1" && mo::indirectArray "$1" "$moPrevious${moResult:0:moLen}" "$moContent"
+}
+
+
+# Internal: Handle closing a tag
+#
+# $1 - Destination variable name, will be set to an array
+# $2 - Previous content
+# $3 - Content
+# $4 - Current name (the variable NAME for what {{.}} means)
+# $5 - Close delimiter for the current tag
+# $6 - Current block being processed
+# $7 - Standalone content
+#
+# The destination value will be an array
+#     [0] = the result text ($2)
+#     [1] = remaining content to parse, excluding the closing delimiter (nothing)
+#     [2] = Unparsed content outside of the block (the remainder)
+#
+# Returns nothing.
+mo::parseCloseTag() {
+    local moContent moArgs moCurrent moCloseDelimiter moCurrentBlock moPrevious moStandaloneContent
+
+    moPrevious=$2
+    moContent=${3:1}
+    moCurrent=$4
+    moCloseDelimiter=$5
+    moCurrentBlock=$6
+    moStandaloneContent=$7
+    mo::parseValueInner moArgs "$moContent" "$moCurrent" "$moCloseDelimiter"
+    moContent="${moArgs[0]#$moCloseDelimiter}"
+    mo::debug "Closing tag: ${moArgs[2]}"
+
+    if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
+        mo::standaloneProcessBefore moPrevious "$moPrevious"
+        mo::standaloneProcessAfter moContent "$moContent"
+    fi
+
+    if [[ -n "$moCurrentBlock" ]] && [[ "${moArgs[2]}" != "$moCurrentBlock" ]]; then
+        mo::error "Unexpected close tag: ${moArgs[2]}, expected $moCurrentBlock"
+    elif [[ -z "$moCurrentBlock" ]]; then
+        mo::error "Unexpected close tag: ${moArgs[2]}"
+    fi
+
+    local "$1" && mo::indirectArray "$1" "$moPrevious" "" "$moContent"
+}
+
+
+# Internal: Handle parsing a comment
+#
+# $1 - Destination variable name, will be set to an array
+# $2 - Previous content
+# $3 - Content
+# $4 - Close delimiter for the current tag
+# $5 - Standalone content
+#
+# The destination value will be an array
+#     [0] = the result text
+#     [1] = remaining content to parse, excluding the closing delimiter
+#
+# Returns nothing
+mo::parseComment() {
+    local moContent moCloseDelimiter moStandaloneContent moPrevious moContent moCloseDelimiter
+
+    moPrevious=$2
+    moContent=$3
+    moCloseDelimiter=$4
+    moStandaloneContent=$5
+    moContent=${moContent#*$moCloseDelimiter}
+    mo::debug "Parsing comment"
+
+    if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
+        mo::standaloneProcessBefore moPrevious "$moPrevious"
+        mo::standaloneProcessAfter moContent "$moContent"
+    fi
+
+    local "$1" && mo::indirectArray "$1" "$moPrevious" "$moContent"
+}
+
+
+# Internal: Handle parsing the change of delimiters
+#
+# $1 - Destination variable name, will be set to an array
+# $2 - Previous content
+# $3 - Content
+# $4 - Close delimiter for the current tag
+# $5 - Standalone content
+#
+# The destination value will be an array
+#     [0] = the result text
+#     [1] = remaining content to parse, excluding the closing delimiter
+#     [2] = new open delimiter
+#     [3] = new close delimiter
+#
+# Returns nothing
+mo::parseDelimiter() {
+    local moContent moCloseDelimiter moOpen moClose moPrevious moStandaloneContent
+
+    moPrevious=$2
+    mo::trim moContent "${3#=}"
+    moCloseDelimiter=$4
+    moStandaloneContent=$5
+    mo::chomp moOpen "$moContent"
+    moContent=${moContent:${#moOpen}}
+    mo::trim moContent "$moContent"
+    moClose="${moContent%%=$moCloseDelimiter*}"
+    moContent=${moContent#*=$moCloseDelimiter}
+    mo::debug "Parsing delimiters: $moOpen $moClose"
+
+    if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
+        mo::standaloneProcessBefore moPrevious "$moPrevious"
+        mo::standaloneProcessAfter moContent "$moContent"
+    fi
+
+    local "$1" && mo::indirectArray "$1" "$moPrevious" "$moContent" "$moOpen" "$moClose"
+}
+
+
+# Internal: Handle parsing value or function call
+#
+# $1 - Destination variable name, will be set to an array
+# $2 - Previous content
+# $3 - Content
+# $4 - Current name (the variable NAME for what {{.}} means)
+# $5 - Open delimiter for the current tag
+# $6 - Close delimiter for the current tag
+# $7 - Fast mode (skip to end of block) if non-empty
+#
+# The destination value will be an array
+#     [0] = the result text
+#     [1] = remaining content to parse, excluding the closing delimiter
+#
+# Returns nothing
+mo::parseValue() {
+    local moContent moContentOriginal moOpenDelimiter moCurrent moCloseDelimiter moArgs moResult moFastMode moPrevious
+
+    moPrevious=$2
+    moContentOriginal=$3
+    moCurrent=$4
+    moOpenDelimiter=$5
+    moCloseDelimiter=$6
+    moFastMode=$7
+    mo::trim moContent "${moContentOriginal#$moOpenDelimiter}"
+
+    mo::parseValueInner moArgs "$moContent" "$moCurrent" "$moCloseDelimiter"
+    moContent=${moArgs[0]}
+    moArgs=("${moArgs[@]:1}")
+
+    if [[ -n "$moFastMode" ]]; then
+        moResult=""
+    else
+        mo::evaluate moResult "$moCurrent" "${moArgs[@]}"
+    fi
+
+    if [[ "${moContent:0:${#moCloseDelimiter}}" != "$moCloseDelimiter" ]]; then
+        mo::error "Did not find closing tag near: $moContentOriginal"
+    fi
+
+    moContent=${moContent:${#moCloseDelimiter}}
+
+    local "$1" && mo::indirectArray "$1" "$moPrevious$moResult" "$moContent"
+}
+
+
+# Internal: Handle parsing value or function call inside of delimiters
+#
+# $1 - Destination variable name, will be set to an array
+# $2 - Content
+# $3 - Current name (the variable NAME for what {{.}} means)
+# $4 - Close delimiter for the current tag
+#
+# The destination value will be an array
+#     [0] = remaining content to parse, including the closing delimiter
+#     [1-*] = a list of argument type, argument name/value
+#
+# Returns nothing
+mo::parseValueInner() {
+    local moContent moCurrent moCloseDelimiter moArgs moArgResult moResult
+
+    moContent=$2
+    moCurrent=$3
+    moCloseDelimiter=$4
+    moArgs=()
+
+    while [[ "$moContent" != "$moCloseDelimiter"* ]] && [[ "$moContent" != "}"* ]] && [[ "$moContent" != ")"* ]] && [[ -n "$moContent" ]]; do
+        mo::getArgument moArgResult "$moCurrent" "$moContent" "$moCloseDelimiter"
+        moArgs=(${moArgs[@]+"${moArgs[@]}"} "${moArgResult[0]}" "${moArgResult[1]}")
+        mo::trim moContent "${moArgResult[2]}"
+    done
+
+    mo::debug "Parsed arguments: ${moArgs[*]}"
+
+    local "$1" && mo::indirectArray "$1" "$moContent" ${moArgs[@]+"${moArgs[@]}"}
+}
+
+
+# Internal: Retrieve an argument name
+#
+# $1 - Destination variable name. Will be an array.
+# $2 - Content
+# $3 - Closing delimiter
+#
+# The array will have the following elements
+#     [0] = argument type, "NAME" or "VALUE"
+#     [1] = argument name or value
+#     [2] = unparsed content
+#
+# Returns nothing
+mo::getArgument() {
+    local moContent moCurrent moClosingDelimiter moArg
+
+    moCurrent=$2
+    moContent=$3
+    moClosingDelimiter=$4
+
+    case "$moContent" in
+        '{'*)
+            mo::getArgumentBrace moArg "$moContent" "$moCurrent" "$moClosingDelimiter"
+            ;;
+
+        '('*)
+            mo::getArgumentParenthesis moArg "$moContent" "$moCurrent" "$moClosingDelimiter"
+            ;;
+
+        '"'*)
+            mo::getArgumentDoubleQuote moArg "$moContent"
+            ;;
+
+        "'"*)
+            mo::getArgumentSingleQuote moArg "$moContent"
+            ;;
+
+        *)
+            mo::getArgumentDefault moArg "$moContent" "$moClosingDelimiter"
+    esac
+
+    mo::debug "Found argument: ${moArg[0]} ${moArg[1]}"
+
+    local "$1" && mo::indirectArray "$1" "${moArg[0]}" "${moArg[1]}" "${moArg[2]}"
+}
+
+
+# Internal: Get an argument, which is the result of a subexpression as a VALUE
+#
+# $1 - Destination variable name, an array with two elements
+# $2 - Content
+# $3 - Current name (the variable NAME for what {{.}} means)
+# $4 - Close delimiter for the current tag
+#
+# The array has the following elements.
+#     [0] = argument type, "NAME" or "VALUE"
+#     [1] = argument name or value
+#     [2] = unparsed content
+#
+# Returns nothing.
+mo::getArgumentBrace() {
+    local moResult moContent moCurrent moCloseDelimiter moArgs
+
+    mo::trim moContent "${2:1}"
+    moCurrent=$3
+    moCloseDelimiter=$4
+    mo::parseValueInner moResult "$moContent" "$moCurrent" "$moCloseDelimiter"
+    moContent="${moResult[0]}"
+    moArgs=("${moResult[@]:1}")
+    mo::evaluate moResult "$moCurrent" "${moArgs[@]}"
+
+    if [[ "${moContent:0:1}" != "}" ]]; then
+        mo::error "Unbalanced brace near ${2:0:20}"
+    fi
+
+    mo::trim moContent "${moContent:1}"
+
+    local "$1" && mo::indirectArray "$1" "VALUE" "${moResult[0]}" "$moContent"
+}
+
+
+# Internal: Get an argument, which is the result of a subexpression as a NAME
+#
+# $1 - Destination variable name, an array with two elements
+# $2 - Content
+# $3 - Current name (the variable NAME for what {{.}} means)
+# $4 - Close delimiter for the current tag
+#
+# The array has the following elements.
+#     [0] = argument type, "NAME" or "VALUE"
+#     [1] = argument name or value
+#     [2] = unparsed content
+#
+# Returns nothing.
+mo::getArgumentParenthesis() {
+    local moResult moContent moCurrent moCloseDelimiter
+
+    mo::trim moContent "${2:1}"
+    moCurrent=$3
+    moCloseDelimiter=$4
+    mo::parseValueInner moResult "$moContent" "$moCurrent" "$moCloseDelimiter"
+    moContent="${moResult[1]}"
+
+    if [[ "${moContent:0:1}" != ")" ]]; then
+        mo::error "Unbalanced parenthesis near ${2:0:20}"
+    fi
+
+    mo::trim moContent "${moContent:1}"
+
+    local "$1" && mo::indirectArray "$1" "NAME" "${moResult[0]}" "$moContent"
+}
+
+
+# Internal: Get an argument in a double quoted string
+#
+# $1 - Destination variable name, an array with two elements
+# $2 - Content
+#
+# The array has the following elements.
+#     [0] = argument type, "NAME" or "VALUE"
+#     [1] = argument name or value
+#     [2] = unparsed content
+#
+# Returns nothing.
+mo::getArgumentDoubleQuote() {
+    local moTemp moContent
+
+    moTemp=""
+    moContent=${2:1}
+
+    while [[ "${moContent:0:1}" != '"' ]]; do
+        case "$moContent" in
+            \\n)
+                moTemp="$moTemp"$'\n'
+                moContent=${moContent:2}
+                ;;
+
+            \\r)
+                moTemp="$moTemp"$'\r'
+                moContent=${moContent:2}
+                ;;
+
+            \\t)
+                moTemp="$moTemp"$'\t'
+                moContent=${moContent:2}
+                ;;
+
+            \\*)
+                moTemp="$moTemp${moContent:1:1}"
+                moContent=${moContent:2}
+                ;;
+
+            *)
+                moTemp="$moTemp${moContent:0:1}"
+                moContent=${moContent:1}
+                ;;
+        esac
+
+        if [[ -z "$moContent" ]]; then
+            mo::error "Found starting double quote but no closing double quote"
+        fi
+    done
+
+    mo::debug "Parsed double quoted value: $moTemp"
+
+    local "$1" && mo::indirectArray "$1" "VALUE" "$moTemp" "${moContent:1}"
+}
+
+
+# Internal: Get an argument in a single quoted string
+#
+# $1 - Destination variable name, an array with two elements
+# $2 - Content
+#
+# The array has the following elements.
+#     [0] = argument type, "NAME" or "VALUE"
+#     [1] = argument name or value
+#     [2] = unparsed content
+#
+# Returns nothing.
+mo::getArgumentSingleQuote() {
+    local moTemp moContent
+
+    moTemp=""
+    moContent=${2:1}
+
+    while [[ "${moContent:0:1}" != "'" ]]; do
+        moTemp="$moTemp${moContent:0:1}"
+        moContent=${moContent:1}
+
+        if [[ -z "$moContent" ]]; then
+            mo::error "Found starting single quote but no closing single quote"
+        fi
+    done
+
+    mo::debug "Parsed single quoted value: $moTemp"
+
+    local "$1" && mo::indirectArray "$1" "VALUE" "$moTemp" "${moContent:1}"
+}
+
+
+# Internal: Get an argument that is a simple variable name
+#
+# $1 - Destination variable name, an array with two elements
+# $2 - Content
+#
+# The array has the following elements.
+#     [0] = argument type, "NAME" or "VALUE"
+#     [1] = argument name or value
+#     [2] = unparsed content
+#
+# Returns nothing.
+mo::getArgumentDefault() {
+    local moTemp moContent
+
+    moTemp=$2
+    mo::chomp moTemp "${moTemp%%$3*}"
+    moTemp=${moTemp%%)*}
+    moTemp=${moTemp%%\}*}
+    moContent=${2:${#moTemp}}
+    mo::debug "Parsed default argument: $moTemp"
+
+    local "$1" && mo::indirectArray "$1" "NAME" "$moTemp" "$moContent"
+}
+
+
+# Internal: Determine if the given name is a defined function.
+#
+# $1 - Function name to check
+#
+# Be extremely careful.  Even if strict mode is enabled, it is not honored
+# in newer versions of Bash.  Any errors that crop up here will not be
+# caught automatically.
+#
+# Examples
+#
+#   moo () {
+#       echo "This is a function"
+#   }
+#   if mo::isFunction moo; then
+#       echo "moo is a defined function"
+#   fi
+#
+# Returns 0 if the name is a function, 1 otherwise.
+mo::isFunction() {
+    if declare -F "$1" &> /dev/null; then
+        return 0
+    fi
+
+    return 1
 }
 
 
@@ -488,7 +1144,7 @@ moIndirectArray() {
 #   fi
 #
 # Returns 0 if the name is not empty, 1 otherwise.
-moIsArray() {
+mo::isArray() {
     # Namespace this variable so we don't conflict with what we're testing.
     local moTestResult
 
@@ -500,91 +1156,200 @@ moIsArray() {
 }
 
 
-# Internal: Determine if the given name is a defined function.
+# Internal: Determine if a variable is assigned, even if it is assigned an empty
+# value.
 #
-# $1 - Function name to check
+# $1 - Variable name to check.
 #
-# Be extremely careful.  Even if strict mode is enabled, it is not honored
-# in newer versions of Bash.  Any errors that crop up here will not be
-# caught automatically.
-#
-# Examples
-#
-#   moo () {
-#       echo "This is a function"
-#   }
-#   if moIsFunction moo; then
-#       echo "moo is a defined function"
-#   fi
-#
-# Returns 0 if the name is a function, 1 otherwise.
-moIsFunction() {
-    local functionList functionName
-
-    functionList=$(declare -F)
-    # shellcheck disable=SC2206
-    functionList=( ${functionList//declare -f /} )
-
-    for functionName in "${functionList[@]}"; do
-        if [[ "$functionName" == "$1" ]]; then
-            return 0
-        fi
-    done
-
-    return 1
+# Returns true (0) if the variable is set, 1 if the variable is unset.
+mo::isVarSet() {
+    [[ "${!1-a}" == "${!1-b}" ]]
 }
 
 
-# Internal: Determine if the tag is a standalone tag based on whitespace
-# before and after the tag.
+# Internal: Determine if a value is considered truthy.
 #
-# Passes back a string containing two numbers in the format "BEFORE AFTER"
-# like "27 10".  It indicates the number of bytes remaining in the "before"
-# string (27) and the number of bytes to trim in the "after" string (10).
-# Useful for string manipulation:
+# $1 - The value to test
+# $2 - Invert the value, either "true" or "false"
 #
-# $1 - Variable to set for passing data back
-# $2 - Content before the tag
-# $3 - Content after the tag
-# $4 - true/false: is this the beginning of the content?
+# Returns true (0) if truthy, 1 otherwise.
+mo::isTruthy() {
+    local moTruthy
+
+    moTruthy=true
+
+    if [[ -z "${1-}" ]]; then
+        moTruthy=false
+    elif [[ -n "${MO_FALSE_IS_EMPTY-}" ]] && [[ "${1-}" == "false" ]]; then
+        moTruthy=false
+    fi
+
+    # XOR the results
+    # moTruthy  inverse  desiredResult
+    # true      false    true
+    # true      true     false
+    # false     false    false
+    # false     true     true
+    if [[ "$moTruthy" == "$2" ]]; then
+        return 1
+    fi
+
+    return 0
+}
+
+
+# Internal: Convert an argument list to values
 #
-# Examples
+# $1 - Destination variable name
+# $2 - Current name (the variable NAME for what {{.}} means)
+# $3-$* - A list of argument types and argument name/value.
 #
-#   moIsStandalone RESULT "$before" "$after" false || return 0
-#   RESULT_ARRAY=( $RESULT )
-#   echo "${before:0:${RESULT_ARRAY[0]}}...${after:${RESULT_ARRAY[1]}}"
+# Sample call:
+#
+#     mo::evaluate dest NAME username VALUE abc123
 #
 # Returns nothing.
-moIsStandalone() {
-    local afterTrimmed beforeTrimmed char
+mo::evaluate() {
+    local moResult moTarget moCurrent moFunction moArgs moTemp
 
-    moTrimChars beforeTrimmed "$2" false true " " $'\t'
-    moTrimChars afterTrimmed "$3" true false " " $'\t'
-    char=$((${#beforeTrimmed} - 1))
-    char=${beforeTrimmed:$char}
+    moTarget=$1
+    moCurrent=$2
+    shift 2
 
-    # If the content before didn't end in a newline
-    if [[ "$char" != $'\n' ]] && [[ "$char" != $'\r' ]]; then
-        # and there was content or this didn't start the file
-        if [[ -n "$char" ]] || ! $4; then
-            # then this is not a standalone tag.
-            return 1
+    if [[ "$1" == "NAME" ]] && mo::isFunction "$2"; then
+        # Special case - if the first argument is a function, then the rest are
+        # passed to the function.
+        moFunction=$2
+        mo::evaluateFunction moResult "" "${@:2}"
+    else
+        mo::evaluateListOfSingles moResult "$moCurrent" ${@+"$@"}
+    fi
+
+    local "$moTarget" && mo::indirect "$moTarget" "$moResult"
+}
+
+
+# Internal: Convert an argument list to individual values.
+#
+# $1 - Destination variable name
+# $2 - Current name (the variable NAME for what {{.}} means)
+# $3-$* - A list of argument types and argument name/value.
+#
+# This assumes each value is separate from the rest. In contrast, mo::evaluate
+# will pass all arguments to a function if the first value is a function.
+#
+# Sample call:
+#
+#     mo::evaluateListOfSingles dest NAME username VALUE abc123
+#
+# Returns nothing.
+mo::evaluateListOfSingles() {
+    local moResult moTarget moTemp moCurrent
+
+    moTarget=$1
+    moCurrent=$2
+    shift 2
+    moResult=""
+
+    while [[ $# -gt 1 ]]; do
+        mo::evaluateSingle moTemp "$moCurrent" "$1" "$2"
+        moResult="$moResult$moTemp"
+        shift 2
+    done
+
+    mo::debug "Evaluated list of singles: $moResult"
+
+    local "$moTarget" && mo::indirect "$moTarget" "$moResult"
+}
+
+
+# Internal: Evaluate a single argument
+#
+# $1 - Name of variable for result
+# $2 - Current name (the variable NAME for what {{.}} means)
+# $3 - Type of argument, either NAME or VALUE
+# $4 - Argument
+#
+# Returns nothing
+mo::evaluateSingle() {
+    local moResult moCurrent moVarNameParts moType moArg
+
+    moCurrent=$2
+    moType=$3
+    moArg=$4
+    mo::debug "Evaluating $moType: $moArg"
+
+    if [[ "$moType" == "VALUE" ]]; then
+        moResult=$moArg
+    elif [[ "$moArg" == "." ]]; then
+        mo::evaluateVariable moResult "$moCurrent"
+    elif [[ "$moArg" == "@key" ]]; then
+        mo::evaluateKey moResult "$moCurrent"
+    elif mo::isFunction "$moArg"; then
+        mo::evaluateFunction moResult "" "$moArg"
+    else
+        mo::split moVarNameParts "$moArg" .
+        mo::evaluateVariable moResult "$moArg"
+    fi
+
+    local "$1" && mo::indirect "$1" "$moResult"
+}
+
+
+# Internal: Return the value for @key based on current's name
+#
+# $1 - Name of variable for result
+# $2 - Current name (the variable NAME for what {{.}} means)
+#
+# Returns nothing
+mo::evaluateKey() {
+    local moCurrent moResult
+
+    moCurrent=$2
+
+    if [[ "$moCurrent" == *.* ]]; then
+        moResult="${moCurrent#*.}"
+    else
+        moResult="${moCurrent}"
+    fi
+
+    local "$1" && mo::indirect "$1" "$moResult"
+}
+
+
+# Internal: Handle a variable name
+#
+# $1 - Destination variable name
+# $2 - Variable name
+#
+# Returns nothing.
+mo::evaluateVariable() {
+    local moResult moCurrent moArg moNameParts moJoined moKey moValue
+
+    moArg=$2
+    moResult=""
+    mo::split moNameParts "$moArg" .
+
+    if [[ -z "${moNameParts[1]-}" ]]; then
+        if mo::isArray "$moArg"; then
+            eval mo::join moResult "," "\${$moArg[@]}"
+        else
+            # shellcheck disable=SC2031
+            if mo::isVarSet "$moArg"; then
+                moResult="${!moArg}"
+            elif [[ -n "${MO_FAIL_ON_UNSET-}" ]]; then
+                mo::error "Environment variable not set: $moArg"
+            fi
+        fi
+    else
+        if mo::isArray "${moNameParts[0]}"; then
+            eval "moResult=\"\${${moNameParts[0]}[${moNameParts[1]%%.*}]}\""
+        else
+            mo::error "Unable to index a scalar as an array: $moArg"
         fi
     fi
 
-    char=${afterTrimmed:0:1}
-
-    # If the content after doesn't start with a newline and it is something
-    if [[ "$char" != $'\n' ]] && [[ "$char" != $'\r' ]] && [[ -n "$char" ]]; then
-        # then this is not a standalone tag.
-        return 2
-    fi
-
-    if [[ "$char" == $'\r' ]] && [[ "${afterTrimmed:1:1}" == $'\n' ]]; then
-        char="$char"$'\n'
-    fi
-
-    local "$1" && moIndirect "$1" "$((${#beforeTrimmed})) $((${#3} + ${#char} - ${#afterTrimmed}))"
+    local $1 && mo::indirect "$1" "$moResult"
 }
 
 
@@ -607,508 +1372,161 @@ moJoin() {
         result="$result$joiner$part"
     done
 
-    local "$target" && moIndirect "$target" "$result"
+    local "$target" && mo::indirect "$target" "$result"
 }
 
 
-# Internal: Read a file into a variable.
+# Internal: Call a function.
 #
-# $1 - Variable name to receive the file's content
-# $2 - Filename to load - if empty, defaults to /dev/stdin
-#
-# Returns nothing.
-moLoadFile() {
-    local content len
-
-    # The subshell removes any trailing newlines.  We forcibly add
-    # a dot to the content to preserve all newlines.
-    # As a future optimization, it would be worth considering removing
-    # cat and replacing this with a read loop.
-
-    content=$(cat -- "${2:-/dev/stdin}" && echo '.') || return 1
-    len=$((${#content} - 1))
-    content=${content:0:$len}  # Remove last dot
-
-    local "$1" && moIndirect "$1" "$content"
-}
-
-
-# Internal: Process a chunk of content some number of times.  Writes output
-# to stdout.
-#
-# $1   - Content to parse repeatedly
-# $2   - Tag prefix (context name)
-# $3-@ - Names to insert into the parsed content
+# $1 - Variable for output
+# $2 - Content to pass
+# $3 - Function to call
+# $4-$* - Additional arguments as list of type, value/name
 #
 # Returns nothing.
-moLoop() {
-    local content context contextBase
+mo::evaluateFunction() {
+    local moArgs moContent moFunctionArgs moFunctionResult moTarget moFunction moArgsSafe moTemp
 
-    content=$1
-    contextBase=$2
-    shift 2
+    moTarget=$1
+    moContent=$2
+    moFunction=$3
+    shift 3
+    moArgs=()
 
-    while [[ "${#@}" -gt 0 ]]; do
-        moFullTagName context "$contextBase" "$1"
-        moParse "$content" "$context" false
-        shift
-    done
-}
-
-
-# Internal: Parse a block of text, writing the result to stdout.
-#
-# $1 - Block of text to change
-# $2 - Current name (the variable NAME for what {{.}} means)
-# $3 - true when no content before this, false otherwise
-#
-# Returns nothing.
-moParse() {
-    # Keep naming variables mo* here to not overwrite needed variables
-    # used in the string replacements
-    local moArgs moBlock moContent moCurrent moIsBeginning moNextIsBeginning moTag moKey
-
-    moCurrent=$2
-    moIsBeginning=$3
-
-    # Find open tags
-    moSplit moContent "$1" '{{' '}}'
-
-    while [[ "${#moContent[@]}" -gt 1 ]]; do
-        moTrimWhitespace moTag "${moContent[1]}"
-        moNextIsBeginning=false
-
-        case $moTag in
-            '#'*)
-                # Loop, if/then, or pass content through function
-                # Sets context
-                moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
-                moTrimWhitespace moTag "${moTag:1}"
-
-                # Split arguments from the tag name. Arguments are passed to
-                # functions.
-                moArgs=$moTag
-                moTag=${moTag%% *}
-                moTag=${moTag%%$'\t'*}
-                moArgs=${moArgs:${#moTag}}
-                moFindEndTag moBlock "$moContent" "$moTag"
-                moFullTagName moTag "$moCurrent" "$moTag"
-
-                if moTest "$moTag"; then
-                    # Show / loop / pass through function
-                    if moIsFunction "$moTag"; then
-                        moCallFunction moContent "$moTag" "${moBlock[0]}" "$moArgs"
-                        moParse "$moContent" "$moCurrent" false
-                        moContent="${moBlock[2]}"
-                    elif moIsArray "$moTag"; then
-                        eval "moLoop \"\${moBlock[0]}\" \"$moTag\" \"\${!${moTag}[@]}\""
-                    else
-                        moParse "${moBlock[0]}" "$moCurrent" true
-                    fi
-                fi
-
-                moContent="${moBlock[2]}"
-                ;;
-
-            '>'*)
-                # Load partial - get name of file relative to cwd
-                moPartial moContent "${moContent[@]}" "$moIsBeginning" "$moCurrent"
-                moNextIsBeginning=${moContent[1]}
-                moContent=${moContent[0]}
-                ;;
-
-            '/'*)
-                # Closing tag - If hit in this loop, we simply ignore
-                # Matching tags are found in moFindEndTag
-                moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
-                ;;
-
-            '^'*)
-                # Display section if named thing does not exist
-                moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
-                moTrimWhitespace moTag "${moTag:1}"
-                moFindEndTag moBlock "$moContent" "$moTag"
-                moFullTagName moTag "$moCurrent" "$moTag"
-
-                if ! moTest "$moTag"; then
-                    moParse "${moBlock[0]}" "$moCurrent" false "$moCurrent"
-                fi
-
-                moContent="${moBlock[2]}"
-                ;;
-
-            '!'*)
-                # Comment - ignore the tag content entirely
-                # Trim spaces/tabs before the comment
-                moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
-                ;;
-
-            .)
-                # Current content (environment variable or function)
-                moStandaloneDenied moContent "${moContent[@]}"
-                moShow "$moCurrent" "$moCurrent"
-                ;;
-
-            '=')
-                # Change delimiters
-                # Any two non-whitespace sequences separated by whitespace.
-                # This tag is ignored.
-                moStandaloneAllowed moContent "${moContent[@]}" "$moIsBeginning"
-                ;;
-
-            '{'*)
-                # Unescaped - split on }}} not }}
-                moStandaloneDenied moContent "${moContent[@]}"
-                moContent="${moTag:1}"'}}'"$moContent"
-                moSplit moContent "$moContent" '}}}'
-                moTrimWhitespace moTag "${moContent[0]}"
-                moArgs=$moTag
-                moTag=${moTag%% *}
-                moTag=${moTag%%$'\t'*}
-                moArgs=${moArgs:${#moTag}}
-                moFullTagName moTag "$moCurrent" "$moTag"
-                moContent=${moContent[1]}
-
-                # Now show the value
-                # Quote moArgs here, do not quote it later.
-                moShow "$moTag" "$moCurrent" "$moArgs"
-                ;;
-
-            '&'*)
-                # Unescaped
-                moStandaloneDenied moContent "${moContent[@]}"
-                moTrimWhitespace moTag "${moTag:1}"
-                moFullTagName moTag "$moCurrent" "$moTag"
-                moShow "$moTag" "$moCurrent"
-                ;;
-
-            '@key')
-                # Special vars
-                moStandaloneDenied moContent "${moContent[@]}"
-                # Current content (environment variable or function)
-                if [[ "$moCurrent" == *.* ]]; then
-                    echo -n "${moCurrent#*.}"
-                else
-                    echo -n "$moCurrent"
-                fi
-                ;;
-
-            *)
-                # Normal environment variable or function call
-                moStandaloneDenied moContent "${moContent[@]}"
-                moArgs=$moTag
-                moTag=${moTag%% *}
-                moTag=${moTag%%$'\t'*}
-                moArgs=${moArgs:${#moTag}}
-                moFullTagName moTag "$moCurrent" "$moTag"
-
-                # Quote moArgs here, do not quote it later.
-                moShow "$moTag" "$moCurrent" "$moArgs"
-                ;;
-        esac
-
-        moIsBeginning=$moNextIsBeginning
-        moSplit moContent "$moContent" '{{' '}}'
+    while [[ $# -gt 1 ]]; do
+        mo::evaluateSingle moTemp "$moCurrent" "$1" "$2"
+        moArgs=(${moArgs[@]+"${moArgs[@]}"} "$moTemp")
+        shift 2
     done
 
-    echo -n "${moContent[0]}"
-}
-
-
-# Internal: Process a partial.
-#
-# Indentation should be applied to the entire partial.
-#
-# This sends back the "is beginning" flag because the newline after a
-# standalone partial is consumed. That newline is very important in the middle
-# of content. We send back this flag to reset the processing loop's
-# `moIsBeginning` variable, so the software thinks we are back at the
-# beginning of a file and standalone processing continues to work.
-#
-# Prefix all variables.
-#
-# $1 - Name of destination variable. Element [0] is the content, [1] is the
-#      true/false flag indicating if we are at the beginning of content.
-# $2 - Content before the tag that was not yet written
-# $3 - Tag content
-# $4 - Content after the tag
-# $5 - true/false: is this the beginning of the content?
-# $6 - Current context name
-#
-# Returns nothing.
-moPartial() {
-    # Namespace variables here to prevent conflicts.
-    local moContent moFilename moIndent moIsBeginning moPartial moStandalone moUnindented
-
-    if moIsStandalone moStandalone "$2" "$4" "$5"; then
+    # shellcheck disable=SC2031
+    if [[ -n "${MO_ALLOW_FUNCTION_ARGUMENTS-}" ]]; then
+        # Intentionally remove all function arguments
         # shellcheck disable=SC2206
-        moStandalone=( $moStandalone )
-        echo -n "${2:0:${moStandalone[0]}}"
-        moIndent=${2:${moStandalone[0]}}
-        moContent=${4:${moStandalone[1]}}
-        moIsBeginning=true
+        moArgsSafe=()
     else
-        moIndent=""
-        echo -n "$2"
-        moContent=$4
-        moIsBeginning=$5
+        moArgsSafe=(${moArgs[@]+"${moArgs[@]}"})
     fi
 
-    moTrimWhitespace moFilename "${3:1}"
-
-    # Execute in subshell to preserve current cwd and environment
-    (
-        # It would be nice to remove `dirname` and use a function instead,
-        # but that's difficult when you're only given filenames.
-        cd "$(dirname -- "$moFilename")" || exit 1
-        moUnindented="$(
-            moLoadFile moPartial "${moFilename##*/}" || exit 1
-            moParse "${moPartial}" "$6" true
-
-            # Fix bash handling of subshells and keep trailing whitespace.
-            # This is removed in moIndentLines.
-            echo -n "."
-        )" || exit 1
-        moIndentLines moPartial "$moIndent" "$moUnindented"
-        echo -n "$moPartial"
-    ) || exit 1
-
-    # If this is a standalone tag, the trailing newline after the tag is
-    # removed and the contents of the partial are added, which typically
-    # contain a newline. We need to send a signal back to the processing
-    # loop that the moIsBeginning flag needs to be turned on again.
-    #
-    # [0] is the content, [1] is that flag.
-    local "$1" && moIndirectArray "$1" "$moContent" "$moIsBeginning"
-}
-
-
-# Internal: Show an environment variable or the output of a function to
-# stdout.
-#
-# Limit/prefix any variables used.
-#
-# $1 - Name of environment variable or function
-# $2 - Current context
-# $3 - Arguments string if $1 is a function
-#
-# Returns nothing.
-moShow() {
-    # Namespace these variables
-    local moJoined moNameParts moContent
-
-    if moIsFunction "$1"; then
-        moCallFunction moContent "$1" "" "$3"
-        moParse "$moContent" "$2" false
-        return 0
-    fi
-
-    moSplit moNameParts "$1" "."
-
-    if [[ -z "${moNameParts[1]-}" ]]; then
-        if moIsArray "$1"; then
-            eval moJoin moJoined "," "\${$1[@]}"
-            echo -n "$moJoined"
-        else
-            # shellcheck disable=SC2031
-            if moTestVarSet "$1"; then
-                echo -n "${!1}"
-            elif [[ -n "${MO_FAIL_ON_UNSET-}" ]]; then
-                echo "Env variable not set: $1" >&2
-                exit 1
-            fi
+    mo::debug "Calling function: $moFunction ${moArgs[*]}"
+    moContent=$(echo -n "$moContent" | MO_FUNCTION_ARGS=(${moArgs[@]+"${moArgs[@]}"}) eval "$moFunction" ${moArgsSafe[@]+"${moArgsSafe[@]}"}) || {
+        moFunctionResult=$?
+        # shellcheck disable=SC2031
+        if [[ -n "${MO_FAIL_ON_FUNCTION-}" && "$moFunctionResult" != 0 ]]; then
+            mo::error "Function '$moFunction' with args (${moArgs[@]+"${moArgs[@]}"}) failed with status code $moFunctionResult" "$moFunctionResult"
         fi
-    else
-        # Further subindexes are disallowed
-        eval "echo -n \"\${${moNameParts[0]}[${moNameParts[1]%%.*}]}\""
-    fi
+    }
+
+    # shellcheck disable=SC2031
+    local "$1" && mo::indirect "$1" "$moContent"
 }
 
 
-# Internal: Split a larger string into an array.
+# Internal: Check if a tag appears to have only whitespace before it and after
+# it on a line. There must be a new line before (see the trick in mo::parse)
+# and there must be a newline after or the end of a string
+#
+# $1 - Standalone content that was processed in this loop
+# $2 - Content after the tag
+#
+# Returns 0 if this is a standalone tag, 1 otherwise.
+mo::standaloneCheck() {
+    local moContent moN moR moT
+
+    moN=$'\n'
+    moR=$'\r'
+    moT=$'\t'
+
+    # Check the content before
+    moContent=${1//$moR/$moN}
+
+    if [[ "$moContent" != *"$moN"* ]]; then
+        mo::debug "Not a standalone tag - no newline before"
+        return 1
+    fi
+
+    moContent=${moContent##*$moN}
+    moContent=${moContent//$moT/}
+    moContent=${moContent// /}
+
+    if [[ -n "$moContent" ]]; then
+        mo::debug "Not a standalone tag - non-whitespace detected before tag"
+        return 1
+    fi
+
+    # Check the content after
+    moContent=${2//$moR/$moN}
+    moContent=${moContent%%$moN*}
+    moContent=${moContent//$moT/}
+    moContent=${moContent// /}
+
+    if [[ -n "$moContent" ]]; then
+        mo::debug "Not a standalone tag - non-whitespace detected after tag"
+        return 1
+    fi
+
+    return 0
+}
+
+
+# Internal: Process content before a tag to remove whitespace but not the newline.
 #
 # $1 - Destination variable
-# $2 - String to split
-# $3 - Starting delimiter
-# $4 - Ending delimiter (optional)
+# $2 - Content
 #
 # Returns nothing.
-moSplit() {
-    local pos result
+mo::standaloneProcessBefore() {
+    local moContent moLast moT
 
-    result=( "$2" )
-    moFindString pos "${result[0]}" "$3"
+    moContent=$2
+    moT=$'\t'
+    moLast=
 
-    if [[ "$pos" -ne -1 ]]; then
-        # The first delimiter was found
-        result[1]=${result[0]:$pos + ${#3}}
-        result[0]=${result[0]:0:$pos}
+    mo::debug "Standalone tag - processing content before tag"
 
-        if [[ -n "${4-}" ]]; then
-            moFindString pos "${result[1]}" "$4"
-
-            if [[ "$pos" -ne -1 ]]; then
-                # The second delimiter was found
-                result[2]="${result[1]:$pos + ${#4}}"
-                result[1]="${result[1]:0:$pos}"
-            fi
-        fi
-    fi
-
-    local "$1" && moIndirectArray "$1" "${result[@]}"
-}
-
-
-# Internal: Handle the content for a standalone tag.  This means removing
-# whitespace (not newlines) before a tag and whitespace and a newline after
-# a tag.  That is, assuming, that the line is otherwise empty.
-#
-# $1 - Name of destination "content" variable.
-# $2 - Content before the tag that was not yet written
-# $3 - Tag content (not used)
-# $4 - Content after the tag
-# $5 - true/false: is this the beginning of the content?
-#
-# Returns nothing.
-moStandaloneAllowed() {
-    local bytes
-
-    if moIsStandalone bytes "$2" "$4" "$5"; then
-        # shellcheck disable=SC2206
-        bytes=( $bytes )
-        echo -n "${2:0:${bytes[0]}}"
-        local "$1" && moIndirect "$1" "${4:${bytes[1]}}"
-    else
-        echo -n "$2"
-        local "$1" && moIndirect "$1" "$4"
-    fi
-}
-
-
-# Internal: Handle the content for a tag that is never "standalone".  No
-# adjustments are made for newlines and whitespace.
-#
-# $1 - Name of destination "content" variable.
-# $2 - Content before the tag that was not yet written
-# $3 - Tag content (not used)
-# $4 - Content after the tag
-#
-# Returns nothing.
-moStandaloneDenied() {
-    echo -n "$2"
-    local "$1" && moIndirect "$1" "$4"
-}
-
-
-# Internal: Determines if the named thing is a function or if it is a
-# non-empty environment variable.  When MO_FALSE_IS_EMPTY is set to a
-# non-empty value, then "false" is also treated is an empty value.
-#
-# Do not use variables without prefixes here if possible as this needs to
-# check if any name exists in the environment
-#
-# $1                - Name of environment variable or function
-# $2                - Current value (our context)
-# MO_FALSE_IS_EMPTY - When set to a non-empty value, this will say the
-#                     string value "false" is empty.
-#
-# Returns 0 if the name is not empty, 1 otherwise.  When MO_FALSE_IS_EMPTY
-# is set, this returns 1 if the name is "false".
-moTest() {
-    # Test for functions
-    moIsFunction "$1" && return 0
-
-    if moIsArray "$1"; then
-        # Arrays must have at least 1 element
-        eval "[[ \"\${#${1}[@]}\" -gt 0 ]]" && return 0
-    else
-        # If MO_FALSE_IS_EMPTY is set, then return 1 if the value of
-        # the variable is "false".
-        # shellcheck disable=SC2031
-        [[ -n "${MO_FALSE_IS_EMPTY-}" ]] && [[ "${!1-}" == "false" ]] && return 1
-
-        # Environment variables must not be empty
-        [[ -n "${!1-}" ]] && return 0
-    fi
-
-    return 1
-}
-
-# Internal: Determine if a variable is assigned, even if it is assigned an empty
-# value.
-#
-# $1 - Variable name to check.
-#
-# Returns true (0) if the variable is set, 1 if the variable is unset.
-moTestVarSet() {
-    [[ "${!1-a}" == "${!1-b}" ]]
-}
-
-
-# Internal: Trim the leading whitespace only.
-#
-# $1   - Name of destination variable
-# $2   - The string
-# $3   - true/false - trim front?
-# $4   - true/false - trim end?
-# $5-@ - Characters to trim
-#
-# Returns nothing.
-moTrimChars() {
-    local back current front last target varName
-
-    target=$1
-    current=$2
-    front=$3
-    back=$4
-    last=""
-    shift 4 # Remove target, string, trim front flag, trim end flag
-
-    while [[ "$current" != "$last" ]]; do
-        last=$current
-
-        for varName in "$@"; do
-            $front && current="${current/#$varName}"
-            $back && current="${current/%$varName}"
-        done
+    while [[ "$moLast" != "$moContent" ]]; do
+        moLast=$moContent
+        moContent=${moContent% }
+        moContent=${moContent%$moT}
     done
 
-    local "$target" && moIndirect "$target" "$current"
+    local "$1" && mo::indirect "$1" "$moContent"
 }
 
 
-# Internal: Trim leading and trailing whitespace from a string.
+# Internal: Process content after a tag to remove whitespace including a single newline.
 #
-# $1 - Name of variable to store trimmed string
-# $2 - The string
-#
-# Returns nothing.
-moTrimWhitespace() {
-    local result
-
-    moTrimChars result "$2" true true $'\r' $'\n' $'\t' " "
-    local "$1" && moIndirect "$1" "$result"
-}
-
-
-# Internal: Displays the usage for mo.  Pulls this from the file that
-# contained the `mo` function.  Can only work when the right filename
-# comes is the one argument, and that only happens when `mo` is called
-# with `$0` set to this file.
-#
-# $1 - Filename that has the help message
+# $1 - Destination variable
+# $2 - Content
 #
 # Returns nothing.
-moUsage() {
-    grep '^#/' "${MO_ORIGINAL_COMMAND}" | cut -c 4-
-    echo ""
-    echo "MO_VERSION=$MO_VERSION"
+mo::standaloneProcessAfter() {
+    local moContent moLast moT moR moN
+
+    moContent=$2
+    moT=$'\t'
+    moR=$'\r'
+    moN=$'\n'
+    moLast=
+
+    mo::debug "Standalone tag - processing content after tag"
+
+    while [[ "$moLast" != "$moContent" ]]; do
+        moLast=$moContent
+        moContent=${moContent# }
+        moContent=${moContent#$moT}
+    done
+
+    moContent=${moContent#$moR}
+    moContent=${moContent#$moN}
+
+    local "$1" && mo::indirect "$1" "$moContent"
 }
 
 
 # Save the original command's path for usage later
 MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)/${BASH_SOURCE[0]##*/}"
-MO_VERSION="2.4.1"
+MO_VERSION="3.0.0"
 
 # If sourced, load all functions.
 # If executed, perform the actions as expected.
