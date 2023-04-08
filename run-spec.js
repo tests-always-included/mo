@@ -1,241 +1,258 @@
 #!/usr/bin/env node
 
-var async, exec, fs, summary;
+const exec = require("child_process").exec;
+const fsPromises = require("fs").promises;
 
-function makeShellString(value) {
-    if (typeof value === 'string') {
-        // Newlines are tricky
-        return value.split(/\n/).map(function (chunk) {
-            return JSON.stringify(chunk);
-        }).join('"\n"');
+function specFileToName(file) {
+    return file
+        .replace(/.*\//, "")
+        .replace(".json", "")
+        .replace("~", "")
+        .replace(/(^|-)[a-z]/g, function (match) {
+            return match.toUpperCase();
+        });
+}
+
+function processArraySequentially(array, callback) {
+    function processCopy() {
+        if (arrayCopy.length) {
+            const item = arrayCopy.shift();
+            return Promise.resolve(item)
+                .then(callback)
+                .then((singleResult) => {
+                    result.push(singleResult);
+
+                    return processCopy();
+                });
+        } else {
+            return Promise.resolve(result);
+        }
     }
 
-    if (typeof value === 'number') {
+    const result = [];
+    const arrayCopy = array.slice();
+
+    return processCopy();
+}
+
+function debug(...args) {
+    if (process.env.DEBUG) {
+        console.debug(...args);
+    }
+}
+
+function makeShellString(value) {
+    if (typeof value === "string") {
+        // Newlines are tricky
+        return value
+            .split(/\n/)
+            .map(function (chunk) {
+                return JSON.stringify(chunk);
+            })
+            .join('"\n"');
+    }
+
+    if (typeof value === "number") {
         return value;
     }
 
-    return 'ERR_CONVERTING';
+    return "ERR_CONVERTING";
+}
+
+function addToEnvironmentArray(name, value) {
+    const result = ["("];
+    value.forEach(function (subValue) {
+        result.push(makeShellString(subValue));
+    });
+    result.push(")");
+
+    return name + "=" + result.join(" ");
+}
+
+function addToEnvironmentObject(name, value) {
+    // Sometimes the __tag__ property of the code in the lambdas may
+    // be missing.  :-(
+    if (
+        (value && value.__tag__ === "code") ||
+        (value.ruby && value.php && value.perl)
+    ) {
+        if (value.bash) {
+            return `${name}() { ${value.bash}; }`;
+        }
+
+        return `${name}() { perl -e 'print ((${value.perl})->("'"$1"'"))'; }`;
+    }
+
+    if (value) {
+        return `#${name} is an object and will not work in Bash`;
+    }
+
+    // null
+    return `#${name} is null`;
 }
 
 function addToEnvironment(name, value) {
-    var result;
-
     if (Array.isArray(value)) {
-        result = [
-            '('
-        ];
-        value.forEach(function (subValue) {
-            result.push(makeShellString(subValue));
-        });
-        result.push(')');
-
-        return name + '=' + result.join(' ');
+        return addToEnvironmentArray(name, value);
     }
 
-    // Sometimes the __tag__ property of the code in the lambdas may
-    // be missing.  :-(
-    if (typeof value === 'object') {
-        if (value.__tag__ === 'code' || (value.ruby && value.php && value.perl)) {
-            if (value.bash) {
-                return name + '() { ' + value.bash + '; }';
-            }
-
-            return name + '() { perl -e \'print ((' + value.perl + ')->("\'"$1"\'"))\'; }';
-        }
+    if (typeof value === "object" && value) {
+        return addToEnvironmentObject(name, value);
     }
 
-
-    if (typeof value === 'object') {
-        return '# ' + name + ' is an object and will not work in bash';
+    if (typeof value === "boolean") {
+        return `${name}="${value ? "true" : ""}"`;
     }
 
-    if (typeof value === 'boolean') {
-        if (value) {
-            return name + '="true"';
-        }
-
-        return name + '=""';
-    }
-
-    return name + '=' + makeShellString(value);
+    return `${name}=${makeShellString(value)}`;
 }
 
-function runTest(test, done) {
-    var output, partials, script;
-
-    script = [
-        '#!/usr/bin/env bash'
-    ];
-    partials = test.partials || {};
-
+function buildScript(test) {
+    const script = ["#!/usr/bin/env bash"];
     Object.keys(test.data).forEach(function (name) {
         script.push(addToEnvironment(name, test.data[name]));
     });
-    script.push('. mo');
-    script.push('mo spec-runner/spec-template');
-    test.script = script.join('\n');
-    async.series([
-        function (taskDone) {
-            fs.mkdir("spec-runner/", function (err) {
-                if (err && err.code !== 'EEXIST') {
-                    return taskDone(err);
-                }
+    script.push(". ./mo");
+    script.push("mo spec-runner/spec-template");
+    script.push("");
 
-                taskDone();
-            });
-        },
-        function (taskDone) {
-            fs.writeFile('spec-runner/spec-script', test.script, taskDone);
-        },
-        function (taskDone) {
-            fs.writeFile('spec-runner/spec-template', test.template, taskDone);
-        },
-        function (taskDone) {
-            async.eachSeries(Object.keys(partials), function (partialName, partialDone) {
-                fs.writeFile('spec-runner/' + partialName, test.partials[partialName], partialDone);
-            }, taskDone);
-        },
-        function (taskDone) {
-            exec('bash spec-runner/spec-script', function (err, stdout) {
-                if (err) {
-                    return taskDone(err);
-                }
-
-                output = stdout;
-                taskDone();
-            });
-        },
-        function (taskDone) {
-            async.eachSeries(Object.keys(partials), function (partialName, partialDone) {
-                fs.unlink('spec-runner/' + partialName, partialDone);
-            }, taskDone);
-        },
-        function (taskDone) {
-            fs.unlink('spec-runner/spec-script', taskDone);
-        },
-        function (taskDone) {
-            fs.unlink('spec-runner/spec-template', taskDone);
-        },
-        function (taskDone) {
-            fs.rmdir('spec-runner/', taskDone);
-        }
-    ], function (err) {
-        if (err) {
-            return done(err);
-        }
-        
-        done(null, output);
-    });
-    
-    return '';
+    return script.join("\n");
 }
 
-function prepareAndRunTest(test, done) {
-    async.waterfall([
-        function (taskDone) {
-            console.log('### ' + test.name);
-            console.log('');
-            console.log(test.desc);
-            console.log('');
-            runTest(test, taskDone);
-        },
-        function (actual, taskDone) {
-            test.actual = actual;
-            test.pass = (test.actual === test.expected);
+function writePartials(test) {
+    return processArraySequentially(
+        Object.keys(test.partials),
+        (partialName) => {
+            debug("Writing partial:", partialName);
 
-            if (test.pass) {
-                console.log('Passed.');
-            } else {
-                console.log('Failed.');
-                console.log('');
-                console.log(test);
+            return fsPromises.writeFile(
+                "spec-runner/" + partialName,
+                test.partials[partialName]
+            );
+        }
+    );
+}
+
+function setupEnvironment(test) {
+    return cleanup()
+        .then(() => fsPromises.mkdir("spec-runner/"))
+        .then(() =>
+            fsPromises.writeFile("spec-runner/spec-script", test.script)
+        )
+        .then(() =>
+            fsPromises.writeFile("spec-runner/spec-template", test.template)
+        )
+        .then(() => writePartials(test));
+}
+
+function executeScript(test) {
+    return new Promise((resolve) => {
+        exec("bash spec-runner/spec-script 2>&1", {
+            timeout: 2000
+        }, (err, stdout) => {
+            if (err) {
+                test.scriptError = err.toString();
             }
 
-            console.log('');
-            taskDone();
-        }
-    ], done);
-}
-
-function specFileToName(file) {
-    return file.replace(/.*\//, '').replace('.json', '').replace('~', '').replace(/(^|-)[a-z]/g, function (match) {
-        return match.toUpperCase();
+            test.output = stdout;
+            resolve();
+        });
     });
 }
 
-function processSpecFile(specFile, done) {
-    fs.readFile(specFile, 'utf8', function (err, data) {
-        var name;
+function cleanup() {
+    return fsPromises.rm("spec-runner/", { force: true, recursive: true });
+}
 
-        if (err) {
-            return done(err);
-        }
+function detectFailure(test) {
+    if (test.scriptError) {
+        return true;
+    }
 
-        name = specFileToName(specFile);
-        data = JSON.parse(data);
-        console.log(name);
-        console.log('====================');
-        console.log('');
-        console.log(data.overview);
-        console.log('');
-        console.log('Tests');
-        console.log('-----');
-        console.log('');
-        async.series([
-            function (taskDone) {
-                async.eachSeries(data.tests, prepareAndRunTest, taskDone);
-            },
-            function (taskDone) {
-                summary[name] = {};
-                data.tests.forEach(function (test) {
-                    summary[name][test.name] = test.pass;
-                });
-                taskDone();
+    if (test.output !== test.expected) {
+        return true;
+    }
+
+    return false;
+}
+
+function showFailureDetails(testSet, test) {
+    if (!test.isFailure) {
+        return;
+    }
+
+    console.log(`FAILURE: ${testSet.name} -> ${test.name}`)
+    console.log('');
+    console.log(test.desc);
+    console.log('');
+    console.log(test);
+}
+
+function runTest(testSet, test) {
+    test.script = buildScript(test);
+    test.partials = test.partials || {};
+    debug('Running test:', testSet.name, "->", test.name);
+
+    return setupEnvironment(test)
+        .then(() => executeScript(test))
+        .then(cleanup)
+        .then(() => test.isFailure = detectFailure(test))
+        .then(() => showFailureDetails(testSet, test));
+}
+
+function processSpecFile(filename) {
+    debug("Read spec file:", filename);
+
+    return fsPromises.readFile(filename, "utf8").then((fileContents) => {
+        const testSet = JSON.parse(fileContents);
+        testSet.name = specFileToName(filename);
+
+        return processArraySequentially(testSet.tests, (test) =>
+            runTest(testSet, test)
+        ).then(() => {
+            testSet.pass = 0;
+            testSet.fail = 0;
+
+            for (const test of testSet.tests) {
+                if (test.isFailure) {
+                    testSet.fail += 1;
+                } else {
+                    testSet.pass += 1;
+                }
             }
-        ], done);
+            console.log(`### ${testSet.name} Results = ${testSet.pass} pass, ${testSet.fail} fail`);
+
+            return testSet;
+        });
     });
 }
 
 // 0 = node, 1 = script, 2 = file
 if (process.argv.length < 3) {
-    console.log('Specify one or more JSON spec files on the command line');
+    console.log("Specify one or more JSON spec files on the command line");
     process.exit();
 }
 
-async = require('async');
-fs = require('fs');
-exec = require('child_process').exec;
-summary = {};
-async.eachSeries(process.argv.slice(2), processSpecFile, function () {
-    var fail, pass;
+processArraySequentially(process.argv.slice(2), processSpecFile).then(
+    (result) => {
+        console.log('=========================================');
+        console.log('');
+        console.log('Failed Test Summary');
+        console.log('');
 
-    console.log('');
-    console.log('Summary');
-    console.log('=======');
-    console.log('');
-    pass = 0;
-    fail = 0;
-    Object.keys(summary).forEach(function (name) {
-        var groupPass, groupFail, testResults;
-       
-        testResults = [];
-        groupPass = 0;
-        groupFail = 0;
-        Object.keys(summary[name]).forEach(function (testName) {
-            if (summary[name][testName]) {
-                testResults.push('    * pass - ' + testName);
-                groupPass += 1;
-                pass += 1;
-            } else {
-                testResults.push('    * FAIL - ' + testName);
-                groupFail += 1;
-                fail += 1;
+        for (const testSet of result) {
+            console.log(`* ${testSet.name}: ${testSet.tests.length} total, ${testSet.pass} pass, ${testSet.fail} fail`);
+
+            for (const test of testSet.tests) {
+                if (test.isFailure) {
+                    console.log(`    * Failure: ${test.name}`);
+                }
             }
-        });
-        testResults.unshift('* ' + name + ' (failed ' + groupFail + ' out of ' + (groupPass + groupFail) + ' tests)');
-        console.log(testResults.join('\n'));
-    });
-
-    console.log('');
-    console.log('Failed ' + fail + ' out of ' + (pass + fail) + ' tests');
-});
+        }
+    },
+    (err) => {
+        console.error(err);
+        console.error("FAILURE RUNNING SCRIPT");
+        console.error("Testing artifacts are left in script-runner/ folder");
+    }
+);
