@@ -736,7 +736,7 @@ mo::parseCloseTag() {
     local moContent moArgs moCurrent moCloseDelimiter moCurrentBlock moPrevious moStandaloneContent
 
     moPrevious=$2
-    moContent=${3:1}
+    mo::trim moContent "${3:1}"
     moCurrent=$4
     moCloseDelimiter=$5
     moCurrentBlock=$6
