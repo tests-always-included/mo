@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+declare -A a
+a=()
+template="o{{#a.b}}WRONG{{/a.b}}k"
+expected="ok"
+
+runTest

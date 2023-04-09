@@ -11,14 +11,28 @@ const fsPromises = require("fs").promises;
 //
 // To override any test property, just define that property.
 const testOverrides = {
-    'Lambdas -> Escaping': {
+    'Interpolation -> HTML Escaping': {
         skip: 'HTML escaping is not supported'
     },
     'Interpolation -> Implicit Iterators - HTML Escaping': {
         skip: 'HTML escaping is not supported'
     },
-    'Interpolation -> HTML Escaping': {
+    'Lambdas -> Escaping': {
         skip: 'HTML escaping is not supported'
+    },
+    'Sections -> Dotted Names - Broken Chains': {
+        // Complex objects are not supported
+        template: `"{{#a.b}}Here{{/a.b}}" == ""`
+    },
+    'Sections -> Dotted Names - Falsey': {
+        // Complex objects are not supported
+        data: { a: { b: false } },
+        template: `"{{#a.b}}Here{{/a.b}}" == ""`
+    },
+    'Sections -> Dotted Names - Truthy': {
+        // Complex objects are not supported
+        data: { a: { b: true } },
+        template: `"{{#a.b}}Here{{/a.b}}" == "Here"`
     }
 };
 
@@ -61,6 +75,10 @@ function debug(...args) {
 }
 
 function makeShellString(value) {
+    if (typeof value === "boolean") {
+        return value ? '"true"' : '""';
+    }
+
     if (typeof value === "string") {
         // Newlines are tricky
         return value
@@ -88,26 +106,47 @@ function addToEnvironmentArray(name, value) {
     return name + "=" + result.join(" ");
 }
 
-function addToEnvironmentObject(name, value) {
-    if (value) {
-        // Sometimes the __tag__ property of the code in the lambdas may be
-        // missing.  :-(
-        if (
-            (value.__tag__ === "code") ||
-            (value.ruby && value.php && value.perl)
-        ) {
-            if (value.bash) {
-                return `${name}() { ${value.bash}; }`;
+function addToEnvironmentObjectConvertedToAssociativeArray(name, value) {
+    const values = [];
+
+    for (const [k, v] of Object.entries(value)) {
+        if (typeof v === 'object') {
+            if (v) {
+                // An object - abort
+                return `# ${name}.${k} is an object that can not be converted to an associative array`;
             }
 
-            return `${name}() { perl -e 'print ((${value.perl})->("'"$1"'"))'; }`;
+            // null
+            values.push(`[${k}]=`);
+        } else {
+            values.push(`[${k}]=${makeShellString(v)}`);
         }
-
-        return `#${name} is an object and will not work in Bash`;
     }
 
-    // null
-    return `#${name} is null`;
+    return `declare -A ${name}\n${name}=(${values.join(' ')})`;
+}
+
+function addToEnvironmentObject(name, value) {
+    if (!value) {
+        // null
+        return `#${name} is null`;
+    }
+
+    // Sometimes the __tag__ property of the code in the lambdas may be
+    // missing. Compensate by detecting commonly defined languages.
+    if (
+        (value.__tag__ === "code") ||
+        (value.ruby && value.php && value.perl)
+    ) {
+        if (value.bash) {
+            return `${name}() { ${value.bash}; }`;
+        }
+
+        return `${name}() { perl -e 'print ((${value.perl})->("'"$1"'"))'; }`;
+    }
+
+
+    return addToEnvironmentObjectConvertedToAssociativeArray(name, value);
 }
 
 function addToEnvironment(name, value) {
@@ -117,10 +156,6 @@ function addToEnvironment(name, value) {
 
     if (typeof value === "object") {
         return addToEnvironmentObject(name, value);
-    }
-
-    if (typeof value === "boolean") {
-        return `${name}="${value ? "true" : ""}"`;
     }
 
     return `${name}=${makeShellString(value)}`;
@@ -204,19 +239,26 @@ function showFailureDetails(test) {
 }
 
 function applyTestOverrides(test) {
-    const overrides = testOverrides[test.fullName] || {};
+    const overrides = testOverrides[test.fullName];
+    const originals = {};
+
+    if (!overrides) {
+        return;
+    }
 
     for (const [key, value] of Object.entries(overrides)) {
+        originals[key] = test[key];
         test[key] = value;
     }
+
+    test.valuesBeforeOverride = originals;
 }
 
 function runTest(testSet, test) {
-    test.script = buildScript(test);
     test.partials = test.partials || {};
     test.fullName = `${testSet.name} -> ${test.name}`;
-
     applyTestOverrides(test);
+    test.script = buildScript(test);
 
     if (test.skip) {
         debug('Skipping test:', testSet.fullName, `$(${test.skip})`);

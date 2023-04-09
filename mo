@@ -1513,7 +1513,7 @@ mo::evaluateVariable() {
         fi
     else
         if mo::isArray "${moNameParts[0]}"; then
-            eval "moResult=\"\${${moNameParts[0]}[${moNameParts[1]%%.*}]}\""
+            eval "set +u;moResult=\"\${${moNameParts[0]}[${moNameParts[1]%%.*}]}\""
         else
             mo::error "Unable to index a scalar as an array: $moArg"
         fi
