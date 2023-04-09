@@ -541,7 +541,7 @@ mo::parse() {
 #
 # Returns nothing
 mo::parseBlock() {
-    local moContent moCurrent moOpenDelimiter moCloseDelimiter moInvertBlock moTag moArgs moTemp moParseResult moResult moPrevious moStandaloneContent moArrayName moArrayIndexes moArrayIndex
+    local moContent moCurrent moOpenDelimiter moCloseDelimiter moInvertBlock moArgs moParseResult moPrevious moStandaloneContent
 
     moPrevious=$2
     mo::trim moContent "${3:1}"
@@ -555,90 +555,196 @@ mo::parseBlock() {
     moArgs=("${moArgs[@]:1}")
     mo::debug "Parsing block: ${moArgs[*]}"
 
-    if [[ "${moArgs[0]}" == "NAME" ]] && mo::isFunction "${moArgs[1]}"; then
-        if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
-            mo::standaloneProcessBefore moPrevious "$moPrevious"
-            mo::standaloneProcessAfter moContent "$moContent"
-            moStandaloneContent=$'\n'
-        else
-            moStandaloneContent=""
-        fi
+    if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
+        mo::standaloneProcessBefore moPrevious "$moPrevious"
+        mo::standaloneProcessAfter moContent "$moContent"
+        moStandaloneContent=$'\n'
+    else
+        moStandaloneContent=""
+    fi
 
+    if [[ "${moArgs[0]}" == "NAME" ]] && mo::isFunction "${moArgs[1]}"; then
+        mo::parseBlockFunction moParseResult "$moContent" "$moCurrent" "$moOpenDelimiter" "$moCloseDelimiter" "$moInvertBlock" "$moStandaloneContent" "${moArgs[@]}"
+    elif [[ "${moArgs[0]}" == "NAME" ]] && mo::isArray "${moArgs[1]}"; then
+        mo::parseBlockArray moParseResult "$moContent" "$moCurrent" "$moOpenDelimiter" "$moCloseDelimiter" "$moInvertBlock" "$moStandaloneContent" "${moArgs[@]}"
+    else
+        mo::parseBlockValue moParseResult "$moContent" "$moCurrent" "$moOpenDelimiter" "$moCloseDelimiter" "$moInvertBlock" "$moStandaloneContent" "${moArgs[@]}"
+    fi
+
+    local "$1" && mo::indirectArray "$1" "$moPrevious${moParseResult[0]}" "${moParseResult[1]}" "${moParseResult[2]}"
+}
+
+
+# Internal: Handle parsing a block whose first argument is a function
+#
+# $1 - Destination variable name, will be set to an array
+# $2 - Content
+# $3 - Current name (the variable NAME for what {{.}} means)
+# $4 - Open delimiter
+# $5 - Close delimiter
+# $6 - Invert condition ("true" or "false")
+# $7 - Standalone content
+# $8-$* - The parsed arguments from inside the block tags
+#
+# The destination value will be an array
+#     [0] = the result text
+#     [1] = remaining content to parse, excluding the closing delimiter
+#     [2] = standalone content trick
+#
+# Returns nothing
+mo::parseBlockFunction() {
+    local moTarget moContent moCurrent moOpenDelimiter moCloseDelimiter moInvertBlock moArgs moParseResult moResult moStandaloneContent
+
+    moTarget=$1
+    moContent=$2
+    moCurrent=$3
+    moOpenDelimiter=$4
+    moCloseDelimiter=$5
+    moInvertBlock=$6
+    moStandaloneContent=$7
+    shift 7
+    moArgs=(${@+"$@"})
+    mo::debug "Parsing block function: ${moArgs[*]}"
+
+    if [[ "$moInvertBlock" == "true" ]]; then
+        # The function exists and we're inverting the section, so skip the
+        # block content.
+        mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-FUNCTION" "$moStandaloneContent"
+        moResult=""
+        moContent="${moParseResult[1]}"
+    else
         # Get contents of block after parsing
         mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "" "$moStandaloneContent"
 
         # Pass contents to function
         mo::evaluateFunction moResult "${moParseResult[0]}" "${moArgs[@]:1}"
-        moContent=${moParseResult[1]}
-    elif [[ "${moArgs[0]}" == "NAME" ]] && mo::isArray "${moArgs[1]}"; then
-        # Need to interate across array for each element in the array.
-        if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
-            mo::standaloneProcessBefore moPrevious "$moPrevious"
-            mo::standaloneProcessAfter moContent "$moContent"
-            moStandaloneContent=$'\n'
-        else
-            moStandaloneContent=""
-        fi
-
-        moArrayName=${moArgs[1]}
-        eval "moArrayIndexes=(\"\${!${moArrayName}[@]}\")"
-
-        if [[ "${#moArrayIndexes[@]}" -lt 1 ]]; then
-            # No elements
-            if [[ "$moInvertBlock" == "true" ]]; then
-                # Show the block
-                mo::parse moParseResult "$moContent" "$moArrayName" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" "" "$moStandaloneContent"
-                moResult=${moParseResult[0]}
-            else
-                # Skip the block processing
-                mo::parse moParseResult "$moContent" "$moCurrent" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-EMPTY" "$moStandaloneContent"
-                moResult=""
-            fi
-        else
-            if [[ "$moInvertBlock" == "true" ]]; then
-                # Skip the block processing
-                mo::parse moParseResult "$moContent" "$moCurrent" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-EMPTY" "$moStandaloneContent"
-                moResult=""
-            else
-                moResult=""
-                # Process for each element in the array
-                for moArrayIndex in "${moArrayIndexes[@]}"; do
-                    mo::debug "Iterate over array using element: $moArrayName.$moArrayIndex"
-                    mo::parse moParseResult "$moContent" "$moArrayName.$moArrayIndex" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "" "$moStandaloneContent"
-                    moResult="$moResult${moParseResult[0]}"
-                done
-            fi
-        fi
-
-        moContent=${moParseResult[1]}
-        moStandaloneContent=${moParseResult[2]}
-    else
-        if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
-            mo::standaloneProcessBefore moPrevious "$moPrevious"
-            mo::standaloneProcessAfter moContent "$moContent"
-            moStandaloneContent=$'\n'
-        else
-            moStandaloneContent=""
-        fi
-
-        # Variable, value, or list of mixed things
-        mo::evaluateListOfSingles moResult "$moCurrent" "${moArgs[@]}"
-
-        if mo::isTruthy "$moResult" "$moInvertBlock"; then
-            mo::debug "Block is truthy: $moResult"
-            mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "" "$moStandaloneContent"
-        else
-            mo::debug "Block is falsy: $moResult"
-            mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-FALSY" "$moStandaloneContent"
-            moParseResult[0]=""
-        fi
-
-        moResult=${moParseResult[0]}
-        moContent=${moParseResult[1]}
-        moStandaloneContent=${moParseResult[2]}
     fi
 
-    local "$1" && mo::indirectArray "$1" "$moPrevious$moResult" "$moContent" "$moStandaloneContent"
+    moContent=${moParseResult[1]}
+    moStandaloneContent=${moParseResult[2]}
+    mo::debug "Done parsing block array: ${moArgs[*]}"
+
+    local "$moTarget" && mo::indirectArray "$moTarget" "$moResult" "$moContent" "$moStandaloneContent"
+}
+
+
+# Internal: Handle parsing a block whose first argument is an array
+#
+# $1 - Destination variable name, will be set to an array
+# $2 - Content
+# $3 - Current name (the variable NAME for what {{.}} means)
+# $4 - Open delimiter
+# $5 - Close delimiter
+# $6 - Invert condition ("true" or "false")
+# $7 - Standalone content
+# $8-$* - The parsed arguments from inside the block tags
+#
+# The destination value will be an array
+#     [0] = the result text
+#     [1] = remaining content to parse, excluding the closing delimiter
+#     [2] = standalone content trick
+#
+# Returns nothing
+mo::parseBlockArray() {
+    local moTarget moContent moCurrent moOpenDelimiter moCloseDelimiter moInvertBlock moArgs moParseResult moResult moStandaloneContent moArrayName moArrayIndexes moArrayIndex
+
+    moTarget=$1
+    moContent=$2
+    moCurrent=$3
+    moOpenDelimiter=$4
+    moCloseDelimiter=$5
+    moInvertBlock=$6
+    moStandaloneContent=$7
+    shift 7
+    moArgs=(${@+"$@"})
+    mo::debug "Parsing block array: ${moArgs[*]}"
+    moArrayName=${moArgs[1]}
+    eval "moArrayIndexes=(\"\${!${moArrayName}[@]}\")"
+
+    if [[ "${#moArrayIndexes[@]}" -lt 1 ]]; then
+        # No elements
+        if [[ "$moInvertBlock" == "true" ]]; then
+            # Show the block
+            mo::parse moParseResult "$moContent" "$moArrayName" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" "" "$moStandaloneContent"
+            moResult=${moParseResult[0]}
+        else
+            # Skip the block processing
+            mo::parse moParseResult "$moContent" "$moArrayName" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-EMPTY" "$moStandaloneContent"
+            moResult=""
+        fi
+    else
+        if [[ "$moInvertBlock" == "true" ]]; then
+            # Skip the block processing
+            mo::parse moParseResult "$moContent" "$moArrayName" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-EMPTY" "$moStandaloneContent"
+            moResult=""
+        else
+            moResult=""
+            # Process for each element in the array
+            for moArrayIndex in "${moArrayIndexes[@]}"; do
+                mo::debug "Iterate over array using element: $moArrayName.$moArrayIndex"
+                mo::parse moParseResult "$moContent" "$moArrayName.$moArrayIndex" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "" "$moStandaloneContent"
+                moResult="$moResult${moParseResult[0]}"
+            done
+        fi
+    fi
+
+    moContent=${moParseResult[1]}
+    moStandaloneContent=${moParseResult[2]}
+    mo::debug "Done parsing block array: ${moArgs[*]}"
+
+    local "$moTarget" && mo::indirectArray "$moTarget" "$moResult" "$moContent" "$moStandaloneContent"
+}
+
+
+# Internal: Handle parsing a block whose first argument is a value
+#
+# $1 - Destination variable name, will be set to an array
+# $2 - Content
+# $3 - Current name (the variable NAME for what {{.}} means)
+# $4 - Open delimiter
+# $5 - Close delimiter
+# $6 - Invert condition ("true" or "false")
+# $7 - Standalone content
+# $8-$* - The parsed arguments from inside the block tags
+#
+# The destination value will be an array
+#     [0] = the result text
+#     [1] = remaining content to parse, excluding the closing delimiter
+#     [2] = standalone content trick
+#
+# Returns nothing
+mo::parseBlockValue() {
+    local moTarget moContent moCurrent moOpenDelimiter moCloseDelimiter moInvertBlock moArgs moParseResult moResult moStandaloneContent
+
+    moTarget=$1
+    moContent=$2
+    moCurrent=$3
+    moOpenDelimiter=$4
+    moCloseDelimiter=$5
+    moInvertBlock=$6
+    moStandaloneContent=$7
+    shift 7
+    moArgs=(${@+"$@"})
+    mo::debug "Parsing block value: ${moArgs[*]}"
+
+    # Variable, value, or list of mixed things
+    mo::evaluateListOfSingles moResult "$moCurrent" "${moArgs[@]}"
+
+    if mo::isTruthy "$moResult" "$moInvertBlock"; then
+        mo::debug "Block is truthy: $moResult"
+        mo::parse moParseResult "$moContent" "${moArgs[1]}" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "" "$moStandaloneContent"
+        moResult="${moParseResult[0]}"
+    else
+        mo::debug "Block is falsy: $moResult"
+        mo::parse moParseResult "$moContent" "${moArgs[1]}" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-FALSY" "$moStandaloneContent"
+        moResult=""
+    fi
+
+    moContent=${moParseResult[1]}
+    moStandaloneContent=${moParseResult[2]}
+    mo::debug "Done parsing block value: ${moArgs[*]}"
+
+    local "$moTarget" && mo::indirectArray "$moTarget" "$moResult" "$moContent" "$moStandaloneContent"
 }
 
 
