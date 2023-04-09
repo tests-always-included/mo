@@ -50,7 +50,7 @@ runTest() (
         echo "Actual:"
         echo "$testActual"
 
-        if [[ -n "${MO_DEBUG-}" ]]; then
+        if [[ -n "${MO_DEBUG_TEST-}" ]]; then
             declare -p testExpected
             declare -p testActual
         fi

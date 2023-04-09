@@ -11,28 +11,45 @@ const fsPromises = require("fs").promises;
 //
 // To override any test property, just define that property.
 const testOverrides = {
-    'Interpolation -> HTML Escaping': {
-        skip: 'HTML escaping is not supported'
+    "Interpolation -> HTML Escaping": {
+        skip: "HTML escaping is not supported"
     },
-    'Interpolation -> Implicit Iterators - HTML Escaping': {
-        skip: 'HTML escaping is not supported'
+    "Interpolation -> Implicit Iterators - HTML Escaping": {
+        skip: "HTML escaping is not supported"
     },
-    'Lambdas -> Escaping': {
-        skip: 'HTML escaping is not supported'
+    "Lambdas -> Escaping": {
+        skip: "HTML escaping is not supported"
     },
-    'Sections -> Dotted Names - Broken Chains': {
+    "Sections -> Deeply Nested Contexts": {
+        skip: "Nested objects are not supported"
+    },
+    "Sections -> Dotted Names - Broken Chains": {
         // Complex objects are not supported
         template: `"{{#a.b}}Here{{/a.b}}" == ""`
     },
-    'Sections -> Dotted Names - Falsey': {
+    "Sections -> Dotted Names - Falsey": {
         // Complex objects are not supported
         data: { a: { b: false } },
         template: `"{{#a.b}}Here{{/a.b}}" == ""`
     },
-    'Sections -> Dotted Names - Truthy': {
+    "Sections -> Dotted Names - Truthy": {
         // Complex objects are not supported
         data: { a: { b: true } },
         template: `"{{#a.b}}Here{{/a.b}}" == "Here"`
+    },
+    "Sections -> Implicit Iterator - Array": {
+        skip: "Nested arrays are not supported"
+    },
+    "Sections -> List": {
+        // Arrays of objects are not supported
+        data: { list: [1, 2, 3] },
+        template: `"{{#list}}{{.}}{{/list}}"`
+    },
+    "Sections -> List Context": {
+        skip: "Deeply nested objects are not supported"
+    },
+    "Sections -> List Contexts": {
+        skip: "Deeply nested objects are not supported"
     }
 };
 
@@ -110,7 +127,7 @@ function addToEnvironmentObjectConvertedToAssociativeArray(name, value) {
     const values = [];
 
     for (const [k, v] of Object.entries(value)) {
-        if (typeof v === 'object') {
+        if (typeof v === "object") {
             if (v) {
                 // An object - abort
                 return `# ${name}.${k} is an object that can not be converted to an associative array`;
@@ -123,7 +140,7 @@ function addToEnvironmentObjectConvertedToAssociativeArray(name, value) {
         }
     }
 
-    return `declare -A ${name}\n${name}=(${values.join(' ')})`;
+    return `declare -A ${name}\n${name}=(${values.join(" ")})`;
 }
 
 function addToEnvironmentObject(name, value) {
@@ -134,17 +151,13 @@ function addToEnvironmentObject(name, value) {
 
     // Sometimes the __tag__ property of the code in the lambdas may be
     // missing. Compensate by detecting commonly defined languages.
-    if (
-        (value.__tag__ === "code") ||
-        (value.ruby && value.php && value.perl)
-    ) {
+    if (value.__tag__ === "code" || (value.ruby && value.php && value.perl)) {
         if (value.bash) {
             return `${name}() { ${value.bash}; }`;
         }
 
         return `${name}() { perl -e 'print ((${value.perl})->("'"$1"'"))'; }`;
     }
-
 
     return addToEnvironmentObjectConvertedToAssociativeArray(name, value);
 }
@@ -201,16 +214,20 @@ function setupEnvironment(test) {
 
 function executeScript(test) {
     return new Promise((resolve) => {
-        exec("bash spec-runner/spec-script 2>&1", {
-            timeout: 2000
-        }, (err, stdout) => {
-            if (err) {
-                test.scriptError = err.toString();
-            }
+        exec(
+            "bash spec-runner/spec-script 2>&1",
+            {
+                timeout: 2000
+            },
+            (err, stdout) => {
+                if (err) {
+                    test.scriptError = err.toString();
+                }
 
-            test.output = stdout;
-            resolve();
-        });
+                test.output = stdout;
+                resolve();
+            }
+        );
     });
 }
 
@@ -232,9 +249,9 @@ function detectFailure(test) {
 
 function showFailureDetails(test) {
     console.log(`FAILURE: ${test.fullName}`);
-    console.log('');
+    console.log("");
     console.log(test.desc);
-    console.log('');
+    console.log("");
     console.log(JSON.stringify(test, null, 4));
 }
 
@@ -261,12 +278,12 @@ function runTest(testSet, test) {
     test.script = buildScript(test);
 
     if (test.skip) {
-        debug('Skipping test:', testSet.fullName, `$(${test.skip})`);
+        debug("Skipping test:", testSet.fullName, `$(${test.skip})`);
 
         return Promise.resolve();
     }
 
-    debug('Running test:', testSet.fullName);
+    debug("Running test:", testSet.fullName);
 
     return setupEnvironment(test)
         .then(() => executeScript(test))
@@ -303,7 +320,9 @@ function processSpecFile(filename) {
                     testSet.pass += 1;
                 }
             }
-            console.log(`### ${testSet.name} Results = ${testSet.pass} passed, ${testSet.fail} failed, ${testSet.skip} skipped`);
+            console.log(
+                `### ${testSet.name} Results = ${testSet.pass} passed, ${testSet.fail} failed, ${testSet.skip} skipped`
+            );
 
             return testSet;
         });
@@ -318,11 +337,14 @@ if (process.argv.length < 3) {
 
 processArraySequentially(process.argv.slice(2), processSpecFile).then(
     (result) => {
-        console.log('=========================================');
-        console.log('');
-        console.log('Failed Test Summary');
-        console.log('');
-        let pass = 0, fail = 0, skip = 0, total = 0;
+        console.log("=========================================");
+        console.log("");
+        console.log("Failed Test Summary");
+        console.log("");
+        let pass = 0,
+            fail = 0,
+            skip = 0,
+            total = 0;
 
         for (const testSet of result) {
             pass += testSet.pass;
@@ -330,7 +352,9 @@ processArraySequentially(process.argv.slice(2), processSpecFile).then(
             skip += testSet.skip;
             total += testSet.tests.length;
 
-            console.log(`* ${testSet.name}: ${testSet.tests.length} total, ${testSet.pass} pass, ${testSet.fail} fail, ${testSet.skip} skip`);
+            console.log(
+                `* ${testSet.name}: ${testSet.tests.length} total, ${testSet.pass} pass, ${testSet.fail} fail, ${testSet.skip} skip`
+            );
 
             for (const test of testSet.tests) {
                 if (test.isFailure) {
@@ -339,8 +363,10 @@ processArraySequentially(process.argv.slice(2), processSpecFile).then(
             }
         }
 
-        console.log('');
-        console.log(`Final result: ${total} total, ${pass} pass, ${fail} fail, ${skip} skip`);
+        console.log("");
+        console.log(
+            `Final result: ${total} total, ${pass} pass, ${fail} fail, ${skip} skip`
+        );
 
         if (fail) {
             process.exit(1);

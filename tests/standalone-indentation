@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+content=$'<\n->'
+template() {
+    cat <<EOF
+\
+ {{>fixtures/standalone-indentation.partial}}
+/
+EOF
+}
+expected() {
+    cat <<EOF
+\
+ |
+ <
+->
+ |
+/
+EOF
+}
+
+runTest

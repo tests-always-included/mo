@@ -1,0 +1,14 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+a=foo
+b=wrong
+declare -A sec
+sec=([b]="bar")
+declare -A c
+c=([d]="baz")
+template="{{#sec}}{{a}} {{b}} {{c.d}}{{/sec}}"
+expected="foo bar baz"
+
+runTest

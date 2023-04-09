@@ -786,7 +786,7 @@ mo::parsePartial() {
         moR=$'\r'
         moIndentation="$moN${moPrevious//$moR/$moN}"
         moIndentation=${moIndentation##*$moN}
-        mo::debug "Adding indentation: '$moIndentation'"
+        mo::debug "Adding indentation to partial: '$moIndentation'"
         mo::standaloneProcessBefore moPrevious "$moPrevious"
         mo::standaloneProcessAfter moContent "$moContent"
         moStandaloneContent=$'\n'
@@ -810,6 +810,8 @@ mo::parsePartial() {
                     exit 1
                 fi
 
+                mo::indentLines moResult "$moResult" "$moIndentation"
+
                 # Delimiters are reset when loading a new partial
                 mo::parse moResult "$moResult" "$moCurrent" "" "{{" "}}" "" $'\n'
 
@@ -823,7 +825,7 @@ mo::parsePartial() {
             exit 1
         fi
 
-        mo::indentLines moResult "${moResult%.}" "$moIndentation"
+        moResult=${moResult%.}
     fi
 
     local "$1" && mo::indirectArray "$1" "$moPrevious$moResult" "$moContent" "$moStandaloneContent"
@@ -1317,6 +1319,42 @@ mo::isArray() {
 }
 
 
+# Internal: Determine if an array index exists.
+#
+# $1 - Variable name to check
+# $2 - The index to check
+#
+# Has to check if the variable is an array and if the index is valid for that
+# type of array.
+#
+# Returns true (0) if everything was ok, 1 if there's any condition that fails.
+mo::isArrayIndexValid() {
+    local moDeclare moTest
+
+    moDeclare=$(declare -p "$1")
+    moTest=""
+
+    if [[ "${moDeclare:0:10}" == "declare -a" ]]; then
+        # Numerically indexed array - must check if the index looks like a
+        # number because using a string to index a numerically indexed array
+        # will appear like it worked.
+        if [[ "$2" == "0" ]] || [[ "$2" =~ ^[1-9][0-9]*$ ]]; then
+            # Index looks like a number
+            eval "moTest=\"\${$1[$2]+ok}\""
+        fi
+    elif [[ "${moDeclare:0:10}" == "declare -A" ]]; then
+        # Associative array
+        eval "moTest=\"\${$1[$2]+ok}\""
+    fi
+
+    if [[ -n "$moTest" ]]; then
+        return 0;
+    fi
+
+    return 1
+}
+
+
 # Internal: Determine if a variable is assigned, even if it is assigned an empty
 # value.
 #
@@ -1442,24 +1480,24 @@ mo::evaluateListOfSingles() {
 #
 # Returns nothing
 mo::evaluateSingle() {
-    local moResult moCurrent moVarNameParts moType moArg
+    local moResult moCurrent moType moArg
 
     moCurrent=$2
     moType=$3
     moArg=$4
-    mo::debug "Evaluating $moType: $moArg"
+
+    mo::debug "Evaluating $moType: $moArg ($moCurrent)"
 
     if [[ "$moType" == "VALUE" ]]; then
         moResult=$moArg
     elif [[ "$moArg" == "." ]]; then
-        mo::evaluateVariable moResult "$moCurrent"
+        mo::evaluateVariable moResult "$moCurrent" ""
     elif [[ "$moArg" == "@key" ]]; then
         mo::evaluateKey moResult "$moCurrent"
     elif mo::isFunction "$moArg"; then
         mo::evaluateFunction moResult "" "$moArg"
     else
-        mo::split moVarNameParts "$moArg" .
-        mo::evaluateVariable moResult "$moArg"
+        mo::evaluateVariable moResult "$moArg" "$moCurrent"
     fi
 
     local "$1" && mo::indirect "$1" "$moResult"
@@ -1491,16 +1529,19 @@ mo::evaluateKey() {
 #
 # $1 - Destination variable name
 # $2 - Variable name
+# $3 - Current value
 #
 # Returns nothing.
 mo::evaluateVariable() {
     local moResult moCurrent moArg moNameParts moJoined moKey moValue
 
     moArg=$2
+    moCurrent=$3
     moResult=""
-    mo::split moNameParts "$moArg" .
+    mo::findVariableName moNameParts "$moArg" "$moCurrent"
+    mo::debug "Evaluate variable ($moArg + $moCurrent): ${moNameParts[*]}"
 
-    if [[ -z "${moNameParts[1]-}" ]]; then
+    if [[ -z "${moNameParts[1]}" ]]; then
         if mo::isArray "$moArg"; then
             eval mo::join moResult "," "\${$moArg[@]}"
         else
@@ -1520,6 +1561,58 @@ mo::evaluateVariable() {
     fi
 
     local $1 && mo::indirect "$1" "$moResult"
+}
+
+
+# Internal: Find the name of a variable to use
+#
+# $1 - Destination variable name, receives an array
+# $2 - Variable name from the template
+# $3 - The name of the "current value", from block parsing
+#
+# The array contains the following values
+#     [0] - Variable name
+#     [1] - Array index, or empty string
+#
+# Example variables
+#     a="a"
+#     b="b"
+#     c=("c.0" "c.1")
+#     d=([b]="d.b" [d]="d.d")
+#
+# Given these inputs, produce these outputs
+#     a c => a
+#     a c.0 => a
+#     b d => d.b
+#     b d.d => d.b
+#     a d => d.a
+#     a d.d => d.a
+#     c.0 d => c.0
+#     d.b d => d.b
+# Returns nothing.
+mo::findVariableName() {
+    local moVar moCurrent moNameParts moResultBase moResultIndex
+
+    moVar=$2
+    moCurrent=$3
+    moResultBase=$moVar
+    moResultIndex=""
+
+    if [[ "$moVar" == *.* ]]; then
+        mo::debug "Find variable name; name has dot: $moVar"
+        moResultBase=${moVar%%.*}
+        moResultIndex=${moVar#*.}
+    elif [[ -n "$moCurrent" ]]; then
+        moCurrent=${moCurrent%%.*}
+        mo::debug "Find variable name; look in array: $moCurrent"
+
+        if mo::isArrayIndexValid "$moCurrent" "$moVar"; then
+            moResultBase=$moCurrent
+            moResultIndex=$moVar
+        fi
+    fi
+
+    local "$1" && mo::indirectArray "$1" "$moResultBase" "$moResultIndex"
 }
 
 
