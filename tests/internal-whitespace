@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+boolean=true
+template=$' | {{#boolean}} {{! Important Whitespace }}\n {{/boolean}} | \n'
+expected=$' |  \n  | \n'
+
+runTest

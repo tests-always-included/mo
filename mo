@@ -181,7 +181,7 @@ mo() (
 
     mo::debug "Debug enabled"
     mo::content moContent "${moFiles[@]}" || return 1
-    mo::parse moResult "$moContent" "" "" "{{" "}}" ""
+    mo::parse moResult "$moContent" "" "" "{{" "}}" "" $'\n'
     echo -n "${moResult[0]}${moResult[1]}"
 )
 
@@ -423,11 +423,20 @@ mo::chomp() {
 # $5 - Open delimiter ("{{")
 # $6 - Close delimiter ("}}")
 # $7 - Fast mode (skip to end of block) if non-empty
+# $8 - Starting standalone content hack
 #
+# The standalone content is a trick to make the standalone tag detection
+# possible. When it's set to content with a newline and if the tag supports it,
+# the standalone content check happens. This check ensures only whitespace is
+# after the last newline up to the tag, and only whitespace is after the tag up
+# to the next newline. If that is the case, remove whitespace and the trailing
+# newline. By setting this to $'\n', we're saying we are at the beginning of
+# content.
 #
 # Array has the following elements
 #     [0] - Parsed content
 #     [1] - Unparsed content after the closing tag
+#     [2] - Standalone content hack
 #
 # Returns nothing.
 mo::parse() {
@@ -438,15 +447,9 @@ mo::parse() {
     moOpenDelimiter=$5
     moCloseDelimiter=$6
     moFastMode=$7
+    moStandaloneContent=$8
     moResult=""
     moRemainder=""
-
-    # This is a trick to make the standalone tag detection believe it's on a
-    # new line because there's no other way to easily tell the difference
-    # between a lone tag on a line and two tags where the first one evaluated
-    # to an empty string. Whenever a standalone tag is encountered, this trick
-    # needs to be reset to a newline.
-    moStandaloneContent=$'\n'
     mo::debug "Starting parse, current: $moCurrent, ending tag: $moCurrentBlock, fast: $moFastMode"
 
     while [[ "${#moContent}" -gt 0 ]]; do
@@ -509,8 +512,6 @@ mo::parse() {
 
             moResult=${moParseChunk[0]}
             moContent=${moParseChunk[1]}
-
-            # See above for a comment detailing this standalone trick
             moStandaloneContent=${moParseChunk[2]}
         else
             moResult="$moResult$moContent"
@@ -518,7 +519,7 @@ mo::parse() {
         fi
     done
 
-    local "$1" && mo::indirectArray "$1" "$moResult" "$moRemainder"
+    local "$1" && mo::indirectArray "$1" "$moResult" "$moRemainder" "$moStandaloneContent"
 }
 
 
@@ -564,7 +565,7 @@ mo::parseBlock() {
         fi
 
         # Get contents of block after parsing
-        mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" ""
+        mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "" "$moStandaloneContent"
 
         # Pass contents to function
         mo::evaluateFunction moResult "${moParseResult[0]}" "${moArgs[@]:1}"
@@ -574,6 +575,9 @@ mo::parseBlock() {
         if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
             mo::standaloneProcessBefore moPrevious "$moPrevious"
             mo::standaloneProcessAfter moContent "$moContent"
+            moStandaloneContent=$'\n'
+        else
+            moStandaloneContent=""
         fi
 
         moArrayName=${moArgs[1]}
@@ -583,34 +587,38 @@ mo::parseBlock() {
             # No elements
             if [[ "$moInvertBlock" == "true" ]]; then
                 # Show the block
-                mo::parse moParseResult "$moContent" "$moArrayName" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" ""
+                mo::parse moParseResult "$moContent" "$moArrayName" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" "" "$moStandaloneContent"
                 moResult=${moParseResult[0]}
             else
                 # Skip the block processing
-                mo::parse moParseResult "$moContent" "$moCurrent" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-EMPTY"
+                mo::parse moParseResult "$moContent" "$moCurrent" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-EMPTY" "$moStandaloneContent"
                 moResult=""
             fi
         else
             if [[ "$moInvertBlock" == "true" ]]; then
                 # Skip the block processing
-                mo::parse moParseResult "$moContent" "$moCurrent" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-EMPTY"
+                mo::parse moParseResult "$moContent" "$moCurrent" "$moArrayName" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-EMPTY" "$moStandaloneContent"
                 moResult=""
             else
                 moResult=""
                 # Process for each element in the array
                 for moArrayIndex in "${moArrayIndexes[@]}"; do
                     mo::debug "Iterate over array using element: $moArrayName.$moArrayIndex"
-                    mo::parse moParseResult "$moContent" "$moArrayName.$moArrayIndex" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" ""
+                    mo::parse moParseResult "$moContent" "$moArrayName.$moArrayIndex" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "" "$moStandaloneContent"
                     moResult="$moResult${moParseResult[0]}"
                 done
             fi
         fi
 
         moContent=${moParseResult[1]}
+        moStandaloneContent=${moParseResult[2]}
     else
         if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
             mo::standaloneProcessBefore moPrevious "$moPrevious"
             mo::standaloneProcessAfter moContent "$moContent"
+            moStandaloneContent=$'\n'
+        else
+            moStandaloneContent=""
         fi
 
         # Variable, value, or list of mixed things
@@ -618,15 +626,16 @@ mo::parseBlock() {
 
         if mo::isTruthy "$moResult" "$moInvertBlock"; then
             mo::debug "Block is truthy: $moResult"
-            mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" ""
+            mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "" "$moStandaloneContent"
         else
             mo::debug "Block is falsy: $moResult"
-            mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-FALSY"
+            mo::parse moParseResult "$moContent" "$moCurrent" "${moArgs[1]}" "$moOpenDelimiter" "$moCloseDelimiter" "FAST-FALSY" "$moStandaloneContent"
             moParseResult[0]=""
         fi
 
         moResult=${moParseResult[0]}
         moContent=${moParseResult[1]}
+        moStandaloneContent=${moParseResult[2]}
     fi
 
     local "$1" && mo::indirectArray "$1" "$moPrevious$moResult" "$moContent" "$moStandaloneContent"
@@ -696,7 +705,7 @@ mo::parsePartial() {
                 fi
 
                 # Delimiters are reset when loading a new partial
-                mo::parse moResult "$moResult" "$moCurrent" "" "{{" "}}" ""
+                mo::parse moResult "$moResult" "$moCurrent" "" "{{" "}}" "" $'\n'
 
                 # Fix bash handling of subshells and keep trailing whitespace.
                 echo -n "${moResult[0]}${moResult[1]}."
@@ -1500,6 +1509,7 @@ mo::standaloneCheck() {
 
     if [[ "$moContent" != *"$moN"* ]]; then
         mo::debug "Not a standalone tag - no newline before"
+
         return 1
     fi
 
@@ -1509,6 +1519,7 @@ mo::standaloneCheck() {
 
     if [[ -n "$moContent" ]]; then
         mo::debug "Not a standalone tag - non-whitespace detected before tag"
+
         return 1
     fi
 
@@ -1520,6 +1531,7 @@ mo::standaloneCheck() {
 
     if [[ -n "$moContent" ]]; then
         mo::debug "Not a standalone tag - non-whitespace detected after tag"
+
         return 1
     fi
 
