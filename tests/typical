@@ -2,10 +2,10 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-NAME="Chris"
-VALUE=10000
-TAXED_VALUE=6000
-IN_CA=true
+export NAME="Chris"
+export VALUE=10000
+export TAXED_VALUE=6000
+export IN_CA=true
 template() {
     cat <<EOF
 Hello {{NAME}}

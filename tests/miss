@@ -2,8 +2,8 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-name="Chris"
-company="<b>GitHub</b>"
+export name="Chris"
+export company="<b>GitHub</b>"
 template() {
     cat <<EOF
 * .{{name}}.

@@ -2,7 +2,7 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-repo=()
+export repo=()
 template() {
     cat <<EOF
 {{#repo}}
@@ -13,10 +13,6 @@ template() {
 {{/repo}}
 EOF
 }
-expected() {
-    cat <<EOF
-  No repos :(
-EOF
-}
+export expected=$'  No repos :(\n'
 
 runTest

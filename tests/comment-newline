@@ -10,10 +10,6 @@ run through multiple
 lines}}.</h1>
 EOF
 }
-expected() {
-    cat <<EOF
-<h1>Today.</h1>
-EOF
-}
+export expected=$'<h1>Today.</h1>\n'
 
 runTest

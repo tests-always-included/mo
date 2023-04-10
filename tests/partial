@@ -2,7 +2,7 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-names=( "Tyler" )
+export names=( "Tyler" )
 template() {
     cat <<EOF
 <h2>Names</h2>

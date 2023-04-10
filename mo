@@ -15,26 +15,59 @@
 #/
 #/ Options:
 #/
+#/    --allow-function-arguments
+#/          Permit functions to be called with additional arguments. Otherwise,
+#/          the only way to get access to the arguments is to use the
+#/          MO_FUNCTION_ARGS environment variable.
+#/    -d, --debug
+#/          Enable debug logging to stderr.
 #/    -u, --fail-not-set
-#/          Fail upon expansion of an unset variable.
+#/          Fail upon expansion of an unset variable. Will silently ignore by
+#/          default. Alternately, set MO_FAIL_ON_UNSET to a non-empty value.
 #/    -x, --fail-on-function
-#/          Fail when a function returns a non-zero status code.
+#/          Fail when a function returns a non-zero status code instead of
+#/          silently ignoring it. Alternately, set MO_FAIL_ON_FUNCTION to a
+#/          non-empty value.
+#/    -f, --fail-on-file
+#/          Fail when a file (from command-line or partial) does not exist.
+#/          Alternately, set MO_FAIL_ON_FILE to a non-empty value.
 #/    -e, --false
-#/          Treat the string "false" as empty for conditionals.
+#/          Treat the string "false" as empty for conditionals. Alternately,
+#/          set MO_FALSE_IS_EMPTY to a non-empty value.
 #/    -h, --help
 #/          This message.
 #/    -s=FILE, --source=FILE
 #/          Load FILE into the environment before processing templates.
 #/          Can be used multiple times.
-#/    -d, --debug
-#/          Enable debug logging to stderr.
-#
-# Mo is under a MIT style licence with an additional non-advertising clause.
-# See LICENSE.md for the full text.
-#
-# This is open source!  Please feel free to contribute.
-#
-# https://github.com/tests-always-included/mo
+#/    --    Indicate the end of options. All arguments after this will be
+#/          treated as filenames only. Use when filenames may start with
+#/          hyphens.
+#/
+#/ Mo uses the following environment variables:
+#/
+#/ MO_ALLOW_FUNCTION_ARGUMENTS - When set to a non-empty value, this allows
+#/     functions referenced in templates to receive additional options and
+#/     arguments.
+#/ MO_DEBUG - When set to a non-empty value, additional debug information is
+#/     written to stderr.
+#/ MO_FUNCTION_ARGS - Arguments passed to the function.
+#/ MO_FAIL_ON_FILE - If a filename from the command-line is missing or a
+#/     partial does not exist, abort with an error.
+#/ MO_FAIL_ON_FUNCTION - If a function returns a non-zero status code, abort
+#/     with an error.
+#/ MO_FAIL_ON_UNSET - When set to a non-empty value, expansion of an unset env
+#/     variable will be aborted with an error.
+#/ MO_FALSE_IS_EMPTY - When set to a non-empty value, the string "false" will
+#/     be treated as an empty value for the purposes of conditionals.
+#/ MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate a
+#/     help message.
+#/
+#/ Mo is under a MIT style licence with an additional non-advertising clause.
+#/ See LICENSE.md for the full text.
+#/
+#/ This is open source!  Please feel free to contribute.
+#/
+#/ https://github.com/tests-always-included/mo
 
 
 # Public: Template parser function.  Writes templates to stdout.
@@ -42,63 +75,7 @@
 # $0 - Name of the mo file, used for getting the help message.
 # $@ - Filenames to parse.
 #
-# Options:
-#
-#     --allow-function-arguments
-#
-# Permit functions in templates to be called with additional arguments.  This
-# puts template data directly in to the path of an eval statement. Use with
-# caution. Not listed in the help because it only makes sense when mo is
-# sourced.
-#
-#     -u, --fail-not-set
-#
-# Fail upon expansion of an unset variable.  Default behavior is to silently
-# ignore and expand into empty string.
-#
-#     -x, --fail-on-function
-#
-# Fail when a function used by a template returns an error status code.
-# Alternately, ou may set the MO_FAIL_ON_FUNCTION environment variable to a
-# non-empty value to enable this behavior.
-#
-#     -e, --false
-#
-# Treat "false" as an empty value.  You may set the MO_FALSE_IS_EMPTY
-# environment variable instead to a non-empty value to enable this behavior.
-#
-#     -h, --help
-#
-# Display a help message.
-#
-#     -s=FILE, --source=FILE
-#
-# Source a file into the environment before processing template files.
-# This can be used multiple times.
-#
-#     --
-#
-# Used to indicate the end of options.  You may optionally use this when
-# filenames may start with two hyphens.
-#
-# Mo uses the following environment variables:
-#
-# MO_ALLOW_FUNCTION_ARGUMENTS - When set to a non-empty value, this allows
-#                  functions referenced in templates to receive additional
-#                  options and arguments. This puts the content from the
-#                  template directly into an eval statement. Use with extreme
-#                  care.
-# MO_DEBUG - When set to a non-empty value, additional debug information is
-#                  written to stderr.
-# MO_FUNCTION_ARGS - Arguments passed to the function.
-# MO_FAIL_ON_FUNCTION - If a function returns a non-zero status code, abort
-#                  with an error.
-# MO_FAIL_ON_UNSET - When set to a non-empty value, expansion of an unset env
-#                  variable will be aborted with an error.
-# MO_FALSE_IS_EMPTY - When set to a non-empty value, the string "false" will be
-#                  treated as an empty value for the purposes of conditionals.
-# MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate a
-#                  help message.
+# See the comment above for details.
 #
 # Returns nothing.
 mo() (
@@ -140,6 +117,11 @@ mo() (
                         MO_FAIL_ON_FUNCTION=true
                         ;;
 
+                    -p | --fail-on-file)
+                        # shellcheck disable=SC2030
+                        MO_FAIL_ON_FILE=true
+                        ;;
+
                     -e | --false)
                         # shellcheck disable=SC2030
                         MO_FALSE_IS_EMPTY=true
@@ -162,12 +144,17 @@ mo() (
                         ;;
 
                     -d | --debug)
+                        # shellcheck disable=SC2030
                         MO_DEBUG=true
                         ;;
 
                     --)
                         #: Set a flag indicating we've encountered double hyphens
                         moDoubleHyphens=true
+                        ;;
+
+                    -*)
+                        mo::error "Unknown option: $arg    (See --help for options)"
                         ;;
 
                     *)
@@ -192,6 +179,7 @@ mo() (
 #
 # Returns nothing.
 mo::debug() {
+    # shellcheck disable=SC2031
     if [[ -n "${MO_DEBUG:-}" ]]; then
         echo "DEBUG: $1" >&2
     fi
@@ -205,7 +193,7 @@ mo::debug() {
 # Returns nothing. Exits the program.
 mo::error() {
     echo "ERROR: $1" >&2
-    exit ${2:-1}
+    exit "${2:-1}"
 }
 
 
@@ -264,17 +252,26 @@ mo::content() {
 #
 # Returns nothing.
 mo::contentFile() {
-    local moContent moLen
+    local moContent moFile
 
     # The subshell removes any trailing newlines.  We forcibly add
     # a dot to the content to preserve all newlines.
     # As a future optimization, it would be worth considering removing
     # cat and replacing this with a read loop.
 
-    mo::debug "Loading content: ${2:-/dev/stdin}"
-    moContent=$(cat -- "${2:-/dev/stdin}" && echo '.') || return 1
-    moLen=$((${#moContent} - 1))
-    moContent=${moContent:0:$moLen}  # Remove last dot
+    moFile=${2:-/dev/stdin}
+
+    # shellcheck disable=SC2031
+    if [[ -e "$moFile" ]]; then
+        mo::debug "Loading content: $moFile"
+        moContent=$(cat -- "$moFile" && echo '.') || return 1
+        moContent=${moContent%.}  # Remove last dot
+    elif [[ -n "${MO_FAIL_ON_FILE-}" ]]; then
+        mo::error "No such file: $moFile"
+    else
+        mo::debug "File does not exist: $moFile"
+        moContent=""
+    fi
 
     local "$1" && mo::indirect "$1" "$moContent"
 }
@@ -384,9 +381,9 @@ mo::trim() {
     while [[ "$moContent" != "$moLast" ]]; do
         moLast=$moContent
         moContent=${moContent# }
-        moContent=${moContent#$moR}
-        moContent=${moContent#$moN}
-        moContent=${moContent#$moT}
+        moContent=${moContent#"$moR"}
+        moContent=${moContent#"$moN"}
+        moContent=${moContent#"$moT"}
     done
 
     local "$1" && mo::indirect "$1" "$moContent"
@@ -406,9 +403,9 @@ mo::chomp() {
     moN=$'\n'
     moT=$'\t'
     moTemp=${2%% *}
-    moTemp=${moTemp%%$moR*}
-    moTemp=${moTemp%%$moN*}
-    moTemp=${moTemp%%$moT*}
+    moTemp=${moTemp%%"$moR"*}
+    moTemp=${moTemp%%"$moN"*}
+    moTemp=${moTemp%%"$moT"*}
 
     local "$1" && mo::indirect "$1" "$moTemp"
 }
@@ -440,7 +437,7 @@ mo::chomp() {
 #
 # Returns nothing.
 mo::parse() {
-    local moContent moCurrent moOpenDelimiter moCloseDelimieter moResult moSplit moParseChunk moFastMode moStandaloneContent moRemainder
+    local moContent moCurrent moOpenDelimiter moCloseDelimiter moResult moSplit moParseChunk moFastMode moStandaloneContent moRemainder
     moContent=$2
     moCurrent=$3
     moCurrentBlock=$4
@@ -777,15 +774,15 @@ mo::parsePartial() {
     moCloseDelimiter=$5
     moFastMode=$6
     moStandaloneContent=$7
-    mo::chomp moFilename "${moContent%%$moCloseDelimiter*}"
-    moContent="${moContent#*$moCloseDelimiter}"
+    mo::chomp moFilename "${moContent%%"$moCloseDelimiter"*}"
+    moContent="${moContent#*"$moCloseDelimiter"}"
     moIndentation=""
 
     if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
         moN=$'\n'
         moR=$'\r'
-        moIndentation="$moN${moPrevious//$moR/$moN}"
-        moIndentation=${moIndentation##*$moN}
+        moIndentation="$moN${moPrevious//"$moR"/"$moN"}"
+        moIndentation=${moIndentation##*"$moN"}
         mo::debug "Adding indentation to partial: '$moIndentation'"
         mo::standaloneProcessBefore moPrevious "$moPrevious"
         mo::standaloneProcessAfter moContent "$moContent"
@@ -796,7 +793,6 @@ mo::parsePartial() {
 
     if [[ -n "$moFastMode" ]]; then
         moResult=""
-        moLen=0
     else
         mo::debug "Parsing partial: $moFilename"
 
@@ -901,7 +897,7 @@ mo::parseComment() {
     moContent=$3
     moCloseDelimiter=$4
     moStandaloneContent=$5
-    moContent=${moContent#*$moCloseDelimiter}
+    moContent=${moContent#*"$moCloseDelimiter"}
     mo::debug "Parsing comment"
 
     if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
@@ -942,8 +938,8 @@ mo::parseDelimiter() {
     mo::chomp moOpen "$moContent"
     moContent=${moContent:${#moOpen}}
     mo::trim moContent "$moContent"
-    moClose="${moContent%%=$moCloseDelimiter*}"
-    moContent=${moContent#*=$moCloseDelimiter}
+    moClose="${moContent%%="$moCloseDelimiter"*}"
+    moContent=${moContent#*="$moCloseDelimiter"}
     mo::debug "Parsing delimiters: $moOpen $moClose"
 
     if mo::standaloneCheck "$moStandaloneContent" "$moContent"; then
@@ -983,7 +979,7 @@ mo::parseValue() {
     moOpenDelimiter=$5
     moCloseDelimiter=$6
     moFastMode=$7
-    mo::trim moContent "${moContentOriginal#$moOpenDelimiter}"
+    mo::trim moContent "${moContentOriginal#"$moOpenDelimiter"}"
 
     mo::parseValueInner moArgs "$moContent" "$moCurrent" "$moCloseDelimiter"
     moContent=${moArgs[0]}
@@ -1252,7 +1248,7 @@ mo::getArgumentDefault() {
     local moTemp moContent
 
     moTemp=$2
-    mo::chomp moTemp "${moTemp%%$3*}"
+    mo::chomp moTemp "${moTemp%%"$3"*}"
     moTemp=${moTemp%%)*}
     moTemp=${moTemp%%\}*}
     moContent=${2:${#moTemp}}
@@ -1384,6 +1380,7 @@ mo::isTruthy() {
 
     moTruthy=true
 
+    # shellcheck disable=SC2031
     if [[ -z "${1-}" ]]; then
         moTruthy=false
     elif [[ -n "${MO_FALSE_IS_EMPTY-}" ]] && [[ "${1-}" == "false" ]]; then
@@ -1533,7 +1530,7 @@ mo::evaluateKey() {
 #
 # Returns nothing.
 mo::evaluateVariable() {
-    local moResult moCurrent moArg moNameParts moJoined moKey moValue
+    local moResult moCurrent moArg moNameParts
 
     moArg=$2
     moCurrent=$3
@@ -1543,7 +1540,7 @@ mo::evaluateVariable() {
 
     if [[ -z "${moNameParts[1]}" ]]; then
         if mo::isArray "$moArg"; then
-            eval mo::join moResult "," "\${$moArg[@]}"
+            eval mo::join moResult "," "\${${moArg}[@]}"
         else
             # shellcheck disable=SC2031
             if mo::isVarSet "$moArg"; then
@@ -1560,7 +1557,7 @@ mo::evaluateVariable() {
         fi
     fi
 
-    local $1 && mo::indirect "$1" "$moResult"
+    local "$1" && mo::indirect "$1" "$moResult"
 }
 
 
@@ -1648,7 +1645,7 @@ moJoin() {
 #
 # Returns nothing.
 mo::evaluateFunction() {
-    local moArgs moContent moFunctionArgs moFunctionResult moTarget moFunction moTemp moFunctionCall
+    local moArgs moContent moFunctionResult moTarget moFunction moTemp moFunctionCall
 
     moTarget=$1
     moContent=$2
@@ -1675,16 +1672,18 @@ mo::evaluateFunction() {
     fi
 
     mo::debug "Calling function: $moFunctionCall"
-    moContent=$(export MO_FUNCTION_ARGS=("${moArgs[@]}"); echo -n "$moContent" | eval "$moFunctionCall") || {
+
+    # Call the function in a subshell for safety. Employ the trick to preserve
+    # whitespace at the end of the output.
+    moContent=$(export MO_FUNCTION_ARGS=("${moArgs[@]}"); echo -n "$moContent" | eval "$moFunctionCall ; moFunctionResult=\$? ; echo -n '.' ; exit \"\$moFunctionResult\"") || {
         moFunctionResult=$?
         # shellcheck disable=SC2031
         if [[ -n "${MO_FAIL_ON_FUNCTION-}" && "$moFunctionResult" != 0 ]]; then
-            mo::error "Function '$moFunction' with args (${moArgs[@]+"${moArgs[@]}"}) failed with status code $moFunctionResult" "$moFunctionResult"
+            mo::error "Function failed with status code $moFunctionResult: $moFunctionCall" "$moFunctionResult"
         fi
     }
 
-    # shellcheck disable=SC2031
-    local "$moTarget" && mo::indirect "$moTarget" "$moContent"
+    local "$moTarget" && mo::indirect "$moTarget" "${moContent%.}"
 }
 
 
@@ -1704,7 +1703,7 @@ mo::standaloneCheck() {
     moT=$'\t'
 
     # Check the content before
-    moContent=${1//$moR/$moN}
+    moContent=${1//"$moR"/"$moN"}
 
     if [[ "$moContent" != *"$moN"* ]]; then
         mo::debug "Not a standalone tag - no newline before"
@@ -1712,8 +1711,8 @@ mo::standaloneCheck() {
         return 1
     fi
 
-    moContent=${moContent##*$moN}
-    moContent=${moContent//$moT/}
+    moContent=${moContent##*"$moN"}
+    moContent=${moContent//"$moT"/}
     moContent=${moContent// /}
 
     if [[ -n "$moContent" ]]; then
@@ -1723,9 +1722,9 @@ mo::standaloneCheck() {
     fi
 
     # Check the content after
-    moContent=${2//$moR/$moN}
-    moContent=${moContent%%$moN*}
-    moContent=${moContent//$moT/}
+    moContent=${2//"$moR"/"$moN"}
+    moContent=${moContent%%"$moN"*}
+    moContent=${moContent//"$moT"/}
     moContent=${moContent// /}
 
     if [[ -n "$moContent" ]]; then
@@ -1756,7 +1755,7 @@ mo::standaloneProcessBefore() {
     while [[ "$moLast" != "$moContent" ]]; do
         moLast=$moContent
         moContent=${moContent% }
-        moContent=${moContent%$moT}
+        moContent=${moContent%"$moT"}
     done
 
     local "$1" && mo::indirect "$1" "$moContent"
@@ -1783,11 +1782,11 @@ mo::standaloneProcessAfter() {
     while [[ "$moLast" != "$moContent" ]]; do
         moLast=$moContent
         moContent=${moContent# }
-        moContent=${moContent#$moT}
+        moContent=${moContent#"$moT"}
     done
 
-    moContent=${moContent#$moR}
-    moContent=${moContent#$moN}
+    moContent=${moContent#"$moR"}
+    moContent=${moContent#"$moN"}
 
     local "$1" && mo::indirect "$1" "$moContent"
 }
@@ -1816,8 +1815,8 @@ mo::indentLines() {
         mo::debug "Applying indentation: '${moIndentation}'"
 
         while [[ -n "$moContent" ]]; do
-            moChunk=${moContent%%$moN*}
-            moChunk=${moChunk%%$moR*}
+            moChunk=${moContent%%"$moN"*}
+            moChunk=${moChunk%%"$moR"*}
             moContent=${moContent:${#moChunk}}
 
             if [[ -n "$moChunk" ]]; then

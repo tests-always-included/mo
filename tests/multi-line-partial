@@ -2,7 +2,7 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-multilineData=$'line 1\nline 2'
+export multilineData=$'line 1\nline 2'
 template() {
     cat <<EOF
 Partial:
@@ -26,7 +26,10 @@ Indented:
     line 1
 line 2
 EOF
-    # This one looks odd, but if you check the spec spec/specs/partials.yaml, name "Standalone Indentation" (mirrors "standalone-indentation" in tests/), then the spec clearly shows that the indentation is applied before rendering.
+    # This one looks odd, but if you check the spec spec/specs/partials.yaml,
+    # name "Standalone Indentation" (mirrors "standalone-indentation" in
+    # tests/), then the spec clearly shows that the indentation is applied
+    # before rendering.
 }
 
 runTest

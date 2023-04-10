@@ -2,10 +2,9 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-template=""
-arguments=(--help)
+export arguments=(--help)
 expected() {
-    cat <<EOF
+    cat <<'EOF'
 Mo is a mustache template rendering software written in bash.  It inserts
 environment variables into templates.
 
@@ -21,19 +20,59 @@ Simple usage:
 
 Options:
 
+   --allow-function-arguments
+         Permit functions to be called with additional arguments. Otherwise,
+         the only way to get access to the arguments is to use the
+         MO_FUNCTION_ARGS environment variable.
+   -d, --debug
+         Enable debug logging to stderr.
    -u, --fail-not-set
-         Fail upon expansion of an unset variable.
+         Fail upon expansion of an unset variable. Will silently ignore by
+         default. Alternately, set MO_FAIL_ON_UNSET to a non-empty value.
    -x, --fail-on-function
-         Fail when a function returns a non-zero status code.
+         Fail when a function returns a non-zero status code instead of
+         silently ignoring it. Alternately, set MO_FAIL_ON_FUNCTION to a
+         non-empty value.
+   -f, --fail-on-file
+         Fail when a file (from command-line or partial) does not exist.
+         Alternately, set MO_FAIL_ON_FILE to a non-empty value.
    -e, --false
-         Treat the string "false" as empty for conditionals.
+         Treat the string "false" as empty for conditionals. Alternately,
+         set MO_FALSE_IS_EMPTY to a non-empty value.
    -h, --help
          This message.
    -s=FILE, --source=FILE
          Load FILE into the environment before processing templates.
          Can be used multiple times.
-   -d, --debug
-         Enable debug logging to stderr.
+   --    Indicate the end of options. All arguments after this will be
+         treated as filenames only. Use when filenames may start with
+         hyphens.
+
+Mo uses the following environment variables:
+
+MO_ALLOW_FUNCTION_ARGUMENTS - When set to a non-empty value, this allows
+    functions referenced in templates to receive additional options and
+    arguments.
+MO_DEBUG - When set to a non-empty value, additional debug information is
+    written to stderr.
+MO_FUNCTION_ARGS - Arguments passed to the function.
+MO_FAIL_ON_FILE - If a filename from the command-line is missing or a
+    partial does not exist, abort with an error.
+MO_FAIL_ON_FUNCTION - If a function returns a non-zero status code, abort
+    with an error.
+MO_FAIL_ON_UNSET - When set to a non-empty value, expansion of an unset env
+    variable will be aborted with an error.
+MO_FALSE_IS_EMPTY - When set to a non-empty value, the string "false" will
+    be treated as an empty value for the purposes of conditionals.
+MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate a
+    help message.
+
+Mo is under a MIT style licence with an additional non-advertising clause.
+See LICENSE.md for the full text.
+
+This is open source!  Please feel free to contribute.
+
+https://github.com/tests-always-included/mo
 
 MO_VERSION=3.0.0
 EOF

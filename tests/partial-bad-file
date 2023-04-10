@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+# This file intentionally does not exist
+export template="{{>fixtures/partial-bad-file.partial}}"
+export expected=""
+
+runTest

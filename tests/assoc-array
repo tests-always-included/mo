@@ -6,6 +6,7 @@ declare -A repo
 repo[resque]="Resque"
 repo[hub]="Hub"
 repo[rip]="Rip"
+export repo
 template() {
     cat <<EOF
 {{#repo}}

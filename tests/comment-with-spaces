@@ -2,7 +2,7 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-template="Wor{{! comment }}ks"
-expected="Works"
+export template="Wor{{! comment }}ks"
+export expected="Works"
 
 runTest

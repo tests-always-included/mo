@@ -2,7 +2,7 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-repo=( "resque" "hub" "rip" )
+export repo=( "resque" "hub" "rip" )
 template() {
     cat <<EOF
 {{#repo}}

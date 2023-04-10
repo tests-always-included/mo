@@ -2,7 +2,7 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-name=Willy
+export name=Willy
 MO_ALLOW_FUNCTION_ARGUMENTS=true
 
 pipeTo() {

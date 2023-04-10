@@ -2,7 +2,7 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-thisIsTrue=true
+export thisIsTrue=true
 template() {
     cat <<EOF
 With spacing

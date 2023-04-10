@@ -2,7 +2,7 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-person=""
+export person=""
 template() {
     cat <<EOF
 Shown.
@@ -11,10 +11,6 @@ Shown.
 {{/person}}
 EOF
 }
-expected() {
-    cat <<EOF
-Shown.
-EOF
-}
+export expected=$'Shown.\n'
 
 runTest

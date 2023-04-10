@@ -2,8 +2,9 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-returnCode=1
-person=""
+export returnCode=1
+export arguments=(--fail-on-file)
+export person=""
 template() {
     cat <<EOF
 Won't be there: {{> fixtures/partial-missing.partial}}
@@ -11,7 +12,7 @@ EOF
 }
 expected() {
     cat <<EOF
-cat: partial-missing.partial: No such file or directory
+ERROR: No such file: partial-missing.partial
 EOF
 }
 

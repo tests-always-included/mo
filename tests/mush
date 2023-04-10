@@ -2,12 +2,12 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-USER=jwerle
-GENDER=male
-THING=apple
-COLOR=red
-PERSON=tobi
-ADJECTIVE=cool
+export USER=jwerle
+export GENDER=male
+export THING=apple
+export COLOR=red
+export PERSON=tobi
+export ADJECTIVE=cool
 template() {
     cat <<EOF
 {{! this is a comment }}

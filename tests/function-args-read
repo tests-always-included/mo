@@ -3,8 +3,10 @@ cd "${0%/*}" || exit 1
 . ../run-tests
 
 testArgs() {
-    local args=$(declare -p MO_FUNCTION_ARGS)
-    echo "${args#*=}"
+    local args
+    # shellcheck disable=SC2031
+    args=$(declare -p MO_FUNCTION_ARGS)
+    echo -n "${args#*=}"
 }
 template() {
     cat <<EOF

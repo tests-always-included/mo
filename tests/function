@@ -2,9 +2,10 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-name=Willy
+export name=Willy
 wrapped() {
-    # This eats the newline in the content
+    # Wrapping 'cat' in a subshell eats the trailing whitespace
+    # The echo adds a newline, which is preserved.
     echo "<b>$(cat)</b>"
 }
 template() {
@@ -15,10 +16,6 @@ template() {
 ... this is the last line.
 EOF
 }
-expected() {
-    cat <<EOF
-<b>  Willy is awesome.</b>... this is the last line.
-EOF
-}
+export expected=$'<b>  Willy is awesome.</b>\n... this is the last line.\n'
 
 runTest

@@ -52,6 +52,8 @@ runTest() (
 
         if [[ -n "${MO_DEBUG_TEST-}" ]]; then
             declare -p testExpected
+            # Align the two declare outputs
+            echo -n "  "
             declare -p testActual
         fi
 

@@ -2,9 +2,9 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-USER=j.doe
-ADMIN=false
-arguments=(--false)
+export USER=j.doe
+export ADMIN=false
+export arguments=(--false)
 template() {
     cat <<EOF
 The user {{USER}} exists.
@@ -13,10 +13,6 @@ WRONG - should not be an admin.
 {{/ADMIN}}
 EOF
 }
-expected() {
-    cat <<EOF
-The user j.doe exists.
-EOF
-}
+export expected=$'The user j.doe exists.\n'
 
 runTest

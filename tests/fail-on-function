@@ -5,14 +5,9 @@ cd "${0%/*}" || exit 1
 failFunction() {
     false
 }
-arguments=(--fail-on-function)
-returnCode=1
-
-template="Fail on function? {{failFunction}}"
-expected() {
-    cat <<EOF
-ERROR: Function 'failFunction' with args () failed with status code 1
-EOF
-}
+export arguments=(--fail-on-function)
+export returnCode=1
+export template="Fail on function? {{failFunction}}"
+export expected=$'ERROR: Function failed with status code 1: "failFunction"\n'
 
 runTest

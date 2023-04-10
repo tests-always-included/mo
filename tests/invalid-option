@@ -2,14 +2,10 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-person=""
-template=""
-returnCode=1
-arguments=(--something)
-expected() {
-    cat <<EOF
-cat: --something: No such file or directory
-EOF
-}
+export person=""
+export template=""
+export returnCode=1
+export arguments=(--something)
+export expected=$'ERROR: Unknown option: --something    (See --help for options)\n'
 
 runTest

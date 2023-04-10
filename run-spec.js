@@ -11,6 +11,12 @@ const fsPromises = require("fs").promises;
 //
 // To override any test property, just define that property.
 const testOverrides = {
+    "Comments -> Variable Name Collision": {
+        // Can't use variables with exclamation points easily
+        data: {
+            comment: 4
+        }
+    },
     "Interpolation -> HTML Escaping": {
         skip: "HTML escaping is not supported"
     },
@@ -19,6 +25,9 @@ const testOverrides = {
     },
     "Lambdas -> Escaping": {
         skip: "HTML escaping is not supported"
+    },
+    "Partials -> Recursion": {
+        skip: "Complex objects are not supported and context is reset to the global level, so the recursion will loop forever"
     },
     "Sections -> Deeply Nested Contexts": {
         skip: "Nested objects are not supported"
@@ -268,6 +277,7 @@ function applyTestOverrides(test) {
         test[key] = value;
     }
 
+    test.overridesApplied = true;
     test.valuesBeforeOverride = originals;
 }
 
@@ -310,6 +320,7 @@ function processSpecFile(filename) {
             testSet.pass = 0;
             testSet.fail = 0;
             testSet.skip = 0;
+            testSet.passOverride = 0;
 
             for (const test of testSet.tests) {
                 if (test.isFailure) {
@@ -318,10 +329,14 @@ function processSpecFile(filename) {
                     testSet.skip += 1;
                 } else {
                     testSet.pass += 1;
+
+                    if (test.overridesApplied) {
+                        testSet.passOverride += 1;
+                    }
                 }
             }
             console.log(
-                `### ${testSet.name} Results = ${testSet.pass} passed, ${testSet.fail} failed, ${testSet.skip} skipped`
+                `### ${testSet.name} Results = ${testSet.pass} passed (with ${testSet.passOverride} overridden), ${testSet.fail} failed, ${testSet.skip} skipped`
             );
 
             return testSet;
@@ -344,16 +359,18 @@ processArraySequentially(process.argv.slice(2), processSpecFile).then(
         let pass = 0,
             fail = 0,
             skip = 0,
-            total = 0;
+            total = 0,
+            passOverride = 0;
 
         for (const testSet of result) {
             pass += testSet.pass;
             fail += testSet.fail;
             skip += testSet.skip;
             total += testSet.tests.length;
+            passOverride += testSet.passOverride;
 
             console.log(
-                `* ${testSet.name}: ${testSet.tests.length} total, ${testSet.pass} pass, ${testSet.fail} fail, ${testSet.skip} skip`
+                `* ${testSet.name}: ${testSet.tests.length} total, ${testSet.pass} pass (with ${passOverride} overridden), ${testSet.fail} fail, ${testSet.skip} skip`
             );
 
             for (const test of testSet.tests) {
@@ -365,7 +382,7 @@ processArraySequentially(process.argv.slice(2), processSpecFile).then(
 
         console.log("");
         console.log(
-            `Final result: ${total} total, ${pass} pass, ${fail} fail, ${skip} skip`
+            `Final result: ${total} total, ${pass} pass (with ${passOverride} overridden), ${fail} fail, ${skip} skip`
         );
 
         if (fail) {

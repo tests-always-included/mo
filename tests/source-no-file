@@ -2,9 +2,9 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-arguments=(--source=)
-returnCode=1
-template="Do not display this"
-expected=$'No such file: \n'
+export arguments=(--source=)
+export returnCode=1
+export template="Do not display this"
+export expected=$'No such file: \n'
 
 runTest

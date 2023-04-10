@@ -2,9 +2,9 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-thing="Wor"
-thing2="ks"
-template="{{thing thing2}}"
-expected="Works"
+export thing="Wor"
+export thing2="ks"
+export template="{{thing thing2}}"
+export expected="Works"
 
 runTest

@@ -2,13 +2,15 @@
 cd "${0%/*}" || exit 1
 . ../run-tests
 
-a=foo
-b=wrong
+export a=foo
+export b=wrong
 declare -A sec
 sec=([b]="bar")
+export sec
 declare -A c
 c=([d]="baz")
-template="{{#sec}}{{a}} {{b}} {{c.d}}{{/sec}}"
-expected="foo bar baz"
+export c
+export template="{{#sec}}{{a}} {{b}} {{c.d}}{{/sec}}"
+export expected="foo bar baz"
 
 runTest
