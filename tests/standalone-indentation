@@ -4,14 +4,14 @@ cd "${0%/*}" || exit 1
 
 export content=$'<\n->'
 template() {
-    cat <<EOF
+    cat <<'EOF'
 \
  {{>fixtures/standalone-indentation.partial}}
 /
 EOF
 }
 expected() {
-    cat <<EOF
+    cat <<'EOF'
 \
  |
  <
