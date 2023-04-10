@@ -26,6 +26,33 @@ const testOverrides = {
     "Lambdas -> Escaping": {
         skip: "HTML escaping is not supported"
     },
+    "Lambdas -> Inverted Section": {
+        // This one passed mostly by accident. Correcting so the test still
+        // tests what is was designed to illustrate.
+        data: {
+            static: "static",
+            lambda: {
+                __tag__: 'code',
+                bash: 'false'
+            }
+        }
+    },
+    "Lambdas -> Section - Alternate Delimiters": {
+        data: {
+            lambda: {
+                __tag__: 'code',
+                bash: 'content=$(cat); echo -n "$content{{planet}}=>|planet|$content"'
+            }
+        }
+    },
+    "Lambdas -> Section - Multiple Calls": {
+        data: {
+            lambda: {
+                __tag__: 'code',
+                bash: 'echo -n "__$(cat)__"'
+            }
+        }
+    },
     "Partials -> Recursion": {
         skip: "Complex objects are not supported and context is reset to the global level, so the recursion will loop forever"
     },
@@ -158,14 +185,8 @@ function addToEnvironmentObject(name, value) {
         return `#${name} is null`;
     }
 
-    // Sometimes the __tag__ property of the code in the lambdas may be
-    // missing. Compensate by detecting commonly defined languages.
-    if (value.__tag__ === "code" || (value.ruby && value.php && value.perl)) {
-        if (value.bash) {
-            return `${name}() { ${value.bash}; }`;
-        }
-
-        return `${name}() { perl -e 'print ((${value.perl})->("'"$1"'"))'; }`;
+    if (value.__tag__ === "code") {
+        return `${name}() { ${value.bash || 'echo "NO BASH VERSION OF CODE"'}; }`;
     }
 
     return addToEnvironmentObjectConvertedToAssociativeArray(name, value);
@@ -288,12 +309,12 @@ function runTest(testSet, test) {
     test.script = buildScript(test);
 
     if (test.skip) {
-        debug("Skipping test:", testSet.fullName, `$(${test.skip})`);
+        debug("Skipping test:", test.fullName, `(${test.skip})`);
 
         return Promise.resolve();
     }
 
-    debug("Running test:", testSet.fullName);
+    debug("Running test:", test.fullName);
 
     return setupEnvironment(test)
         .then(() => executeScript(test))
@@ -303,6 +324,8 @@ function runTest(testSet, test) {
 
             if (test.isFailure) {
                 showFailureDetails(test);
+            } else {
+                debug('Test pass:', test.fullName);
             }
         });
 }

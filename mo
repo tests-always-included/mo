@@ -154,7 +154,7 @@ mo() (
                         ;;
 
                     -*)
-                        mo::error "Unknown option: $arg    (See --help for options)"
+                        mo::error "Unknown option: $arg (See --help for options)"
                         ;;
 
                     *)
@@ -938,7 +938,7 @@ mo::parseDelimiter() {
     mo::chomp moOpen "$moContent"
     moContent=${moContent:${#moOpen}}
     mo::trim moContent "$moContent"
-    moClose="${moContent%%="$moCloseDelimiter"*}"
+    mo::chomp moClose "${moContent%%="$moCloseDelimiter"*}"
     moContent=${moContent#*="$moCloseDelimiter"}
     mo::debug "Parsing delimiters: $moOpen $moClose"
 
@@ -1237,6 +1237,7 @@ mo::getArgumentSingleQuote() {
 #
 # $1 - Destination variable name, an array with two elements
 # $2 - Content
+# $3 - Closing delimiter
 #
 # The array has the following elements.
 #     [0] = argument type, "NAME" or "VALUE"
@@ -1536,7 +1537,7 @@ mo::evaluateVariable() {
     moCurrent=$3
     moResult=""
     mo::findVariableName moNameParts "$moArg" "$moCurrent"
-    mo::debug "Evaluate variable ($moArg + $moCurrent): ${moNameParts[*]}"
+    mo::debug "Evaluate variable ($moArg, $moCurrent): ${moNameParts[*]}"
 
     if [[ -z "${moNameParts[1]}" ]]; then
         if mo::isArray "$moArg"; then
@@ -1620,7 +1621,7 @@ mo::findVariableName() {
 # $3-$* - Elements to join
 #
 # Returns nothing.
-moJoin() {
+mo::join() {
     local joiner part result target
 
     target=$1

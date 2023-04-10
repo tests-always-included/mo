@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
 # This embeds a template in the script without using strange `cat` syntax.
+# shellcheck disable=SC1083 disable=SC1010 disable=SC1054 disable=SC1073 disable=SC1072 disable=SC1056 disable=SC1009
 
 cd "$(dirname "$0")" # Go to the script's directory
 

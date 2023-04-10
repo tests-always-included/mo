@@ -10,20 +10,22 @@ export ARRAY=( AAA BBB CCC )
 
 # Include an external template
 INCLUDE() {
-    cat "$MO_FUNCTION_ARGS"
+    # shellcheck disable=SC2031
+    cat "${MO_FUNCTION_ARGS[0]}"
 }
 
 # Print section title
 TITLE() {
     echo "+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+"
-    echo "$MO_FUNCTION_ARGS"
+    # shellcheck disable=SC2031
+    echo "${MO_FUNCTION_ARGS[0]}"
     echo "+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+-+"
 }
 
 cat <<EOF | mo -u
-{{TITLE Part 1}}
+{{TITLE 'Part 1'}}
 {{INCLUDE function-args-part1}}
 
-{{TITLE Part 2}}
+{{TITLE 'Part 2'}}
 {{INCLUDE function-args-part2}}
 EOF

@@ -6,6 +6,6 @@ export person=""
 export template=""
 export returnCode=1
 export arguments=(--something)
-export expected=$'ERROR: Unknown option: --something    (See --help for options)\n'
+export expected=$'ERROR: Unknown option: --something (See --help for options)\n'
 
 runTest
