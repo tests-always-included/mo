@@ -68,10 +68,12 @@ MO_FALSE_IS_EMPTY - When set to a non-empty value, the string "false" will
 MO_OPEN_DELIMITER - The string used when opening a tag. Defaults to "{{".
 MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate a
     help message.
+MO_PARSED - Content that has made it through the template engine.
 MO_STANDALONE_CONTENT - The content that preceeded the current tag. When a
     standalone tag is encountered, this is checked to see if it only
     contains whitespace. If this and the whitespace condition after a tag is
     met, then this will be reset to $'\n'.
+MO_UNPARSED - Template content yet to make it through the parser.
 
 Mo is under a MIT style licence with an additional non-advertising clause.
 See LICENSE.md for the full text.
