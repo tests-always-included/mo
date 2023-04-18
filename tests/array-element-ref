@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+MO_ALLOW_FUNCTION_ARGUMENTS=true
+
+i=2
+k="bar"
+arrname="repo"
+
+declare -a repo
+repo=( "resque" "hub" "rip" )
+
+declare -A assoc
+assoc[foo]="111"
+assoc[bar]="222"
+assoc[baz]="333"
+
+template() {
+    cat <<EOF
+Specific Array Element: {{repo.{i}}}!
+Specific Array Element: {{assoc.{k}}}!
+EOF
+}
+expected() {
+    cat <<EOF
+Specific Array Element: rip!
+Specific Array Element: 222!
+EOF
+}
+
+runTest

@@ -1070,7 +1070,7 @@ mo::getArgument() {
             ;;
 
         *)
-            mo::getArgumentDefault moArg "$moContent" "$moClosingDelimiter"
+            mo::getArgumentDefault moArg "$moContent" "$moCurrent" "$moClosingDelimiter"
     esac
 
     mo::debug "Found argument: ${moArg[0]} ${moArg[1]}"
@@ -1237,6 +1237,8 @@ mo::getArgumentSingleQuote() {
 #
 # $1 - Destination variable name, an array with two elements
 # $2 - Content
+# $3 - Current
+# $4 - Closing delimiter
 #
 # The array has the following elements.
 #     [0] = argument type, "NAME" or "VALUE"
@@ -1245,16 +1247,36 @@ mo::getArgumentSingleQuote() {
 #
 # Returns nothing.
 mo::getArgumentDefault() {
-    local moTemp moContent
+    local moTemp moArgInner moArgParsed moBraceChunk moBreakChunk moTempBefore moContent
 
-    moTemp=$2
-    mo::chomp moTemp "${moTemp%%"$3"*}"
-    moTemp=${moTemp%%)*}
-    moTemp=${moTemp%%\}*}
+    mo::chomp moTemp "$2"
     moContent=${2:${#moTemp}}
-    mo::debug "Parsed default argument: $moTemp"
+    while :; do
+        case "$moTemp" in
+            *'{'*)
+                moBreakChunk="${moTemp%%"$4"*}"
+                moBraceChunk="${moTemp%%\{*}"
+                [[ ${#moBreakChunk} -le ${#moBraceChunk} ]] && break;
 
-    local "$1" && mo::indirectArray "$1" "NAME" "$moTemp" "$moContent"
+                moTempBefore="${moTemp%\{*}"
+                moArgInner="${moTemp:${#moTempBefore}}"
+                mo::getArgumentBrace moArgParsed "$moArgInner" "$3" '}'
+                moTemp="$moTempBefore${moArgParsed[1]}${moArgParsed[2]}"
+                ;;
+
+            *)
+                break;
+                ;;
+        esac
+    done
+
+    mo::chomp moArgParsed "${moTemp%%"$4"*}"
+    moArgParsed=${moArgParsed%%)*}
+    moArgParsed=${moArgParsed%%\}*}
+    moContent=${moTemp:${#moArgParsed}}$moContent
+    mo::debug "Parsed default argument: $moArgParsed"
+
+    local "$1" && mo::indirectArray "$1" "NAME" "$moArgParsed" "$moContent"
 }
 
 
