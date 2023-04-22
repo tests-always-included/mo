@@ -1,4 +1,42 @@
 #!/usr/bin/env bash
+#
+# Run one or more tests.
+#
+# Command-line usage to run all tests.
+#
+#     ./run-tests
+#
+# To run only one test, run "tests/test-name".
+#
+# Usage within a test as a template. Source run-tests to get functions, export
+# any necessary variables, then call runTest.
+#
+#     #!/usr/bin/env bash
+#     cd "${0%/*}" || exit 1
+#     . ../run-tests
+#
+#     export template="This is a template"
+#     export expected="This is a template"
+#     runTest
+#
+# When used within the test, you control various aspects with environment
+# variables or functions.
+#
+# - The content passed into mo is either the variable "$template" or the output
+#   of the function called template.
+# - The expected result is either "$expected" or the function called expected.
+# - The expected return code is "$returnCode" and defaults to 0.
+# - The arguments to pass to mo is the array "${arguments[@]}" and defaults to ().
+#
+# When $MO_DEBUG is set to a non-empty value, the test does not run, but mo is
+# simply executed directly. This allows for calling mo in the same manner as
+# the test but does not buffer output nor expect the output to match the
+# expected.
+#
+# When $MO_DEBUG_TEST is set to a non-empty value, the expected and actual
+# results are shown using "declare -p" to provide an easier time seeing the
+# differences, especially with whitespace.
+
 testCase() {
     echo "Input: $1"
     echo "Expected: $2"
@@ -37,6 +75,12 @@ runTest() (
 
     getValue testTemplate template
     getValue testExpected expected
+
+    if [[ -n "${MO_DEBUG:-}" ]]; then
+        echo -n "$testTemplate" | mo ${arguments[@]+"${arguments[@]}"} 2>&1
+
+        return $?
+    fi
 
     testActual=$(echo -n "$testTemplate" | mo ${arguments[@]+"${arguments[@]}"} 2>&1; echo -n "$hardSpace$?")
     testReturnCode=${testActual##*$hardSpace}

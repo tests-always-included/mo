@@ -517,7 +517,7 @@ mo::parseBlock() {
     mo::tokensToString moTokensString "${moTokens[@]}"
     mo::debug "Parsing block: $moTokensString"
 
-    if mo::standaloneCheck; then
+    if mo::standaloneCheck "$MO_STANDALONE_CONTENT"; then
         mo::standaloneProcess
     fi
 
@@ -671,7 +671,7 @@ mo::parsePartial() {
     MO_UNPARSED="${MO_UNPARSED#*"$MO_CLOSE_DELIMITER"}"
     moIndentation=""
 
-    if mo::standaloneCheck; then
+    if mo::standaloneCheck "$MO_STANDALONE_CONTENT"; then
         moN=$'\n'
         moR=$'\r'
         moIndentation="$moN${MO_PARSED//"$moR"/"$moN"}"
@@ -725,7 +725,7 @@ mo::parseComment() {
     MO_UNPARSED=${MO_UNPARSED#*"$MO_CLOSE_DELIMITER"}
     mo::debug "Parsing comment"
 
-    if mo::standaloneCheck; then
+    if mo::standaloneCheck "$MO_STANDALONE_CONTENT"; then
         mo::standaloneProcess
     fi
 }
@@ -746,7 +746,7 @@ mo::parseDelimiter() {
     MO_UNPARSED=${MO_UNPARSED#*="$MO_CLOSE_DELIMITER"}
     mo::debug "Parsing delimiters: $moOpen $moClose"
 
-    if mo::standaloneCheck; then
+    if mo::standaloneCheck "$MO_STANDALONE_CONTENT"; then
         mo::standaloneProcess
     fi
 
@@ -1234,6 +1234,8 @@ mo::evaluateFunction() {
 # it on a line. There must be a new line before and there must be a newline
 # after or the end of a string
 #
+# $1 - The content before the tag.
+#
 # Returns 0 if this is a standalone tag, 1 otherwise.
 mo::standaloneCheck() {
     local moContent moN moR moT
@@ -1243,7 +1245,7 @@ mo::standaloneCheck() {
     moT=$'\t'
 
     # Check the content before
-    moContent=${MO_STANDALONE_CONTENT//"$moR"/"$moN"}
+    moContent=${1//"$moR"/"$moN"}
 
     # By default, signal to the next check that this one failed
     MO_STANDALONE_CONTENT=""
@@ -1283,7 +1285,11 @@ mo::standaloneCheck() {
 }
 
 
-# Internal: Process content before and after a tag. Remove prior whitespace up to the previous newline. Remove following whitespace up to and including the next newline.
+# Internal: Process content before and after a tag. Remove prior whitespace up
+# to the previous newline. Remove following whitespace up to and including the
+# next newline.
+#
+# No arguments.
 #
 # Returns nothing.
 mo::standaloneProcess() {
@@ -1380,14 +1386,14 @@ mo::escape() {
 #
 # Returns nothing.
 mo::getContentUntilClose() {
-    local moChunk moResult moTemp moTokensString moTokens moTarget moTagStack moResultTemp
+    local moChunk moResult moTemp moTokensString moTokens moTarget moTagStack moResultTemp moStandaloneTemp
 
     moTarget=$1
     moTagStack=("$2")
     mo::debug "Get content until close tag: ${moTagStack[0]}"
     moResult=""
 
-    while [[ -n "$MO_UNPARSED" ]]; do
+    while [[ -n "$MO_UNPARSED" ]] && [[ "${#moTagStack[@]}" -gt 0 ]]; do
         moChunk=${MO_UNPARSED%%"$MO_OPEN_DELIMITER"*}
         moResult="$moResult$moChunk"
         MO_UNPARSED=${MO_UNPARSED:${#moChunk}}
@@ -1482,9 +1488,13 @@ mo::getContentUntilClose() {
         fi
     done
 
-    # FIXME - handle standalone
-    mo::debug "FIXME handle standalone"
-    mo::debug "Block: $moResult"
+    if mo::standaloneCheck "$moResult"; then
+        moResultTemp=$MO_PARSED
+        MO_PARSED=$moResult
+        mo::standaloneProcess
+        moResult=$MO_PARSED
+        MO_PARSED=$moResultTemp
+    fi
 
     local "$moTarget" && mo::indirect "$moTarget" "$moResult"
 }
