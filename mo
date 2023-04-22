@@ -931,7 +931,7 @@ mo::isTruthy() {
 #
 # Returns nothing.
 mo::evaluate() {
-    local moTarget moStack moValue moType moStackSegment moIndex moCombined moResult
+    local moTarget moStack moValue moType moIndex moCombined moResult
 
     moTarget=$1
     shift
@@ -941,13 +941,12 @@ mo::evaluate() {
 
     while [[ $# -gt 0 ]]; do
         case "$1" in
-            PAREN|brace)
+            PAREN|BRACE)
                 moType=$1
                 moValue=$2
                 mo::debug "Combining $moValue tokens"
                 moIndex=$((${#moStack[@]} - (2 * moValue)))
-                moStackSegment=("${moStack[@]:$moIndex}")
-                mo::evaluateListOfSingles moCombined "${moStackSegment[@]}"
+                mo::evaluateListOfSingles moCombined "${moStack[@]:$moIndex}"
 
                 if [[ "$moType" == "PAREN" ]]; then
                     moStack=("${moStack[@]:0:$moIndex}" NAME "$moCombined")
@@ -1643,16 +1642,18 @@ mo::tokenizeTagContents() {
                 ;;
 
             '('*)
-                moResult=("${moResult[@]}" COMMAND "${MO_UNPARSED:0:1}")
+                # Do not tokenize the open paren - treat this as RPL
+                MO_UNPARSED=${MO_UNPARSED:1}
                 mo::tokenizeTagContents moTemp ')'
-                moResult=("${moResult[@]}" "${moTemp[@]}" PAREN "${#moTemp[@]}")
+                moResult=("${moResult[@]}" "${moTemp[@]}" PAREN "$((${#moTemp[@]} / 2))")
                 MO_UNPARSED=${MO_UNPARSED:1}
                 ;;
 
             '{'*)
-                moResult=("${moResult[@]}" COMMAND "${MO_UNPARSED:0:1}")
+                # Do not tokenize the open brace - treat this as RPL
+                MO_UNPARSED=${MO_UNPARSED:1}
                 mo::tokenizeTagContents moTemp '}'
-                moResult=("${moResult[@]}" "${moTemp[@]}" BRACE "${#moTemp[@]}")
+                moResult=("${moResult[@]}" "${moTemp[@]}" BRACE "$((${#moTemp[@]} / 2))")
                 MO_UNPARSED=${MO_UNPARSED:1}
                 ;;
 
