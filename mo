@@ -517,7 +517,7 @@ mo::parseBlock() {
     mo::tokensToString moTokensString "${moTokens[@]:1}"
     mo::debug "Parsing block: $moTokensString"
 
-    if mo::standaloneCheck "$MO_STANDALONE_CONTENT"; then
+    if mo::standaloneCheck; then
         mo::standaloneProcess
     fi
 
@@ -670,7 +670,7 @@ mo::parseBlockValue() {
 #
 # Returns nothing
 mo::parsePartial() {
-    local moFilename moResult moIndentation moN moR
+    local moFilename moResult moIndentation moN moR moTemp moT
 
     MO_UNPARSED=${MO_UNPARSED:1}
     mo::trimUnparsed
@@ -678,11 +678,19 @@ mo::parsePartial() {
     MO_UNPARSED="${MO_UNPARSED#*"$MO_CLOSE_DELIMITER"}"
     moIndentation=""
 
-    if mo::standaloneCheck "$MO_STANDALONE_CONTENT"; then
+    if mo::standaloneCheck; then
         moN=$'\n'
         moR=$'\r'
+        moT=$'\t'
         moIndentation="$moN${MO_PARSED//"$moR"/"$moN"}"
         moIndentation=${moIndentation##*"$moN"}
+        moTemp=${moIndentation// }
+        moTemp=${moTemp//"$moT"}
+
+        if [[ -n "$moTemp" ]]; then
+            moIndentation=
+        fi
+
         mo::debug "Adding indentation to partial: '$moIndentation'"
         mo::standaloneProcess
     fi
@@ -706,7 +714,7 @@ mo::parsePartial() {
             # Delimiters are reset when loading a new partial
             MO_OPEN_DELIMITER="{{"
             MO_CLOSE_DELIMITER="}}"
-            MO_STANDALONE_CONTENT=""
+            MO_STANDALONE_CONTENT=$'\n'
             mo::parse moPartialParsed "$moPartialContent"
 
             # Fix bash handling of subshells and keep trailing whitespace.
@@ -732,7 +740,7 @@ mo::parseComment() {
     MO_UNPARSED=${MO_UNPARSED#*"$MO_CLOSE_DELIMITER"}
     mo::debug "Parsing comment"
 
-    if mo::standaloneCheck "$MO_STANDALONE_CONTENT"; then
+    if mo::standaloneCheck; then
         mo::standaloneProcess
     fi
 }
@@ -753,7 +761,7 @@ mo::parseDelimiter() {
     MO_UNPARSED=${MO_UNPARSED#*="$MO_CLOSE_DELIMITER"}
     mo::debug "Parsing delimiters: $moOpen $moClose"
 
-    if mo::standaloneCheck "$MO_STANDALONE_CONTENT"; then
+    if mo::standaloneCheck; then
         mo::standaloneProcess
     fi
 
@@ -1240,7 +1248,7 @@ mo::evaluateFunction() {
 # it on a line. There must be a new line before and there must be a newline
 # after or the end of a string
 #
-# $1 - The content before the tag.
+# No arguments.
 #
 # Returns 0 if this is a standalone tag, 1 otherwise.
 mo::standaloneCheck() {
@@ -1251,7 +1259,7 @@ mo::standaloneCheck() {
     moT=$'\t'
 
     # Check the content before
-    moContent=${1//"$moR"/"$moN"}
+    moContent=${MO_STANDALONE_CONTENT//"$moR"/"$moN"}
 
     # By default, signal to the next check that this one failed
     MO_STANDALONE_CONTENT=""
@@ -1344,12 +1352,14 @@ mo::indentLines() {
         mo::debug "Not applying indentation, empty indentation"
 
         local "$1" && mo::indirect "$1" "$moContent"
+        return
     fi
 
     if [[ -z "$moContent" ]]; then
         mo::debug "Not applying indentation, empty contents"
 
         local "$1" && mo::indirect "$1" "$moContent"
+        return
     fi
 
     moResult=
@@ -1504,7 +1514,9 @@ mo::getContentUntilClose() {
         fi
     done
 
-    if mo::standaloneCheck "$moResult"; then
+    MO_STANDALONE_CONTENT="$MO_STANDALONE_CONTENT$moResult"
+
+    if mo::standaloneCheck; then
         moResultTemp=$MO_PARSED
         MO_PARSED=$moResult
         mo::standaloneProcess
