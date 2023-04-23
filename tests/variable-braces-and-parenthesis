@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+export array=("wrong0" "item1" "wrong2")
+export index=1
+
+# Example #8 is weird because of how the variable name is parsed. Considering
+# it's an edge case when a user probably has a bug in a template, I think we're
+# good leaving it as-is until a bug report is filed.
+
+template() {
+    cat <<'EOF'
+Starting point:
+1 "{{ array.1 }}" = "item1"
+
+Whole expression:
+2 "{{ {'array.' index} }}" = "array.1"
+3 "{{ ('array.' index) }}" = "item1"
+
+Partial expression:
+4 "{{ 'array.' {index} }}" = "array.1"
+5 "{{ 'array.' (index) }}" = "array."
+
+Combined:
+6 "{{ {'array.' {index}} }}" = "array.1"
+7 "{{ {'array.' (index)} }}" = "array."
+8 "{{ ('array.' (index)) }}" = "wrong0,item1,wrong2"
+9 "{{ ('array.' {index}) }}" = "item1"
+EOF
+}
+
+expected() {
+    cat <<'EOF'
+Starting point:
+1 "item1" = "item1"
+
+Whole expression:
+2 "array.1" = "array.1"
+3 "item1" = "item1"
+
+Partial expression:
+4 "array.1" = "array.1"
+5 "array." = "array."
+
+Combined:
+6 "array.1" = "array.1"
+7 "array." = "array."
+8 "wrong0,item1,wrong2" = "wrong0,item1,wrong2"
+9 "item1" = "item1"
+EOF
+}
+runTest

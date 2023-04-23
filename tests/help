@@ -54,6 +54,7 @@ MO_ALLOW_FUNCTION_ARGUMENTS - When set to a non-empty value, this allows
     functions referenced in templates to receive additional options and
     arguments.
 MO_CLOSE_DELIMITER - The string used when closing a tag. Defaults to "}}".
+MO_CURRENT - Variable name to use for ".".
 MO_DEBUG - When set to a non-empty value, additional debug information is
     written to stderr.
 MO_FUNCTION_ARGS - Arguments passed to the function.

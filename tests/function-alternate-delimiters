@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+export planet=Earth
+lambda() {
+    local content
+
+    content=$(cat)
+    mo::parse content "$content{{planet}} => |planet|$content"
+    echo -n "$content"
+}
+export template="{{= | | =}}<|#lambda|-|/lambda|>"
+export expected="<-{{planet}} => Earth->"
+
+runTest

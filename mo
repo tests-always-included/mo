@@ -514,19 +514,19 @@ mo::parseBlock() {
     MO_UNPARSED=${MO_UNPARSED:1}
     mo::tokenizeTagContents moTokens "$MO_CLOSE_DELIMITER"
     MO_UNPARSED=${MO_UNPARSED#"$MO_CLOSE_DELIMITER"}
-    mo::tokensToString moTokensString "${moTokens[@]}"
+    mo::tokensToString moTokensString "${moTokens[@]:1}"
     mo::debug "Parsing block: $moTokensString"
 
     if mo::standaloneCheck "$MO_STANDALONE_CONTENT"; then
         mo::standaloneProcess
     fi
 
-    if [[ "${moTokens[0]}" == "NAME" ]] && mo::isFunction "${moTokens[1]}"; then
-        mo::parseBlockFunction "$moInvertBlock" "$moTokensString" "${moTokens[@]}"
-    elif [[ "${moTokens[0]}" == "NAME" ]] && mo::isArray "${moTokens[1]}"; then
-        mo::parseBlockArray "$moInvertBlock" "$moTokensString" "${moTokens[@]}"
+    if [[ "${moTokens[1]}" == "NAME" ]] && mo::isFunction "${moTokens[2]}"; then
+        mo::parseBlockFunction "$moInvertBlock" "$moTokensString" "${moTokens[@]:1}"
+    elif [[ "${moTokens[1]}" == "NAME" ]] && mo::isArray "${moTokens[2]}"; then
+        mo::parseBlockArray "$moInvertBlock" "$moTokensString" "${moTokens[@]:1}"
     else
-        mo::parseBlockValue "$moInvertBlock" "$moTokensString" "${moTokens[@]}"
+        mo::parseBlockValue "$moInvertBlock" "$moTokensString" "${moTokens[@]:1}"
     fi
 }
 
@@ -549,8 +549,9 @@ mo::parseBlockFunction() {
     # Pass unparsed content to the function.
     # Keep the updated delimiters if they changed.
 
-    if [[ "$moInvertBlock" == "true" ]]; then
+    if [[ "$moInvertBlock" != "true" ]]; then
         mo::evaluateFunction moResult "$moTemp" "${moTokens[@]:1}"
+        MO_PARSED="$MO_PARSED$moResult"
     fi
 
     mo::debug "Done parsing block function: $moTokensString"
@@ -564,7 +565,7 @@ mo::parseBlockFunction() {
 #
 # Returns nothing
 mo::parseBlockArray() {
-    local moInvertBlock moTokens moResult moArrayName moArrayIndexes moArrayIndex moTemp moUnparsed moOpenDelimiterBefore moCloseDelimiterBefore moOpenDelimiterAfter moCloseDelimiterAfter moParsed moTokensString
+    local moInvertBlock moTokens moResult moArrayName moArrayIndexes moArrayIndex moTemp moUnparsed moOpenDelimiterBefore moCloseDelimiterBefore moOpenDelimiterAfter moCloseDelimiterAfter moParsed moTokensString moCurrent
 
     moInvertBlock=$1
     moTokensString=$2
@@ -585,7 +586,10 @@ mo::parseBlockArray() {
             # Restore the delimiter before parsing
             MO_OPEN_DELIMITER=$moOpenDelimiterBefore
             MO_CLOSE_DELIMITER=$moCloseDelimiterBefore
+            moCurrent=$MO_CURRENT
+            MO_CURRENT=$moArrayName
             mo::parse moParsed "$moTemp"
+            MO_CURRENT=$moCurrent
             MO_PARSED="$MO_PARSED$moParsed"
         fi
     else
@@ -597,8 +601,11 @@ mo::parseBlockArray() {
                 # Restore the delimiter before parsing
                 MO_OPEN_DELIMITER=$moOpenDelimiterBefore
                 MO_CLOSE_DELIMITER=$moCloseDelimiterBefore
-                mo::debug "Iterate over array using element: $moArrayName.$moArrayIndex"
+                moCurrent=$MO_CURRENT
+                MO_CURRENT=$moArrayName.$moArrayIndex
+                mo::debug "Iterate over array using element: $MO_CURRENT"
                 mo::parse moParsed "$moTemp" "$moArrayName"
+                MO_CURRENT=$moCurrent
                 MO_PARSED="$MO_PARSED$moParsed"
             done
 
@@ -694,7 +701,7 @@ mo::parsePartial() {
                 exit 1
             fi
 
-            mo::indentLines "$moIndentation"
+            mo::indentLines moPartialContent "$moIndentation" "$moPartialContent"
 
             # Delimiters are reset when loading a new partial
             MO_OPEN_DELIMITER="{{"
@@ -765,7 +772,7 @@ mo::parseValue() {
 
     moUnparsedOriginal=$MO_UNPARSED
     mo::tokenizeTagContents moTokens "$MO_CLOSE_DELIMITER"
-    mo::evaluate moResult "${moTokens[@]}"
+    mo::evaluate moResult "${moTokens[@]:1}"
     MO_PARSED="$MO_PARSED$moResult"
 
     if [[ "${MO_UNPARSED:0:${#MO_CLOSE_DELIMITER}}" != "$MO_CLOSE_DELIMITER" ]]; then
@@ -967,9 +974,8 @@ mo::evaluate() {
     if [[ "${moStack[0]:-}" == "NAME" ]] && mo::isFunction "${moStack[1]}"; then
         # Special case - if the first argument is a function, then the rest are
         # passed to the function.
-        moFunction=$2
-        mo::debug "Evaluating function: $moFunction"
-        mo::evaluateFunction moResult "" "${moStack[@]:2}"
+        mo::debug "Evaluating function: ${moStack[1]}"
+        mo::evaluateFunction moResult "" "${moStack[@]:1}"
     else
         # Concatenate
         mo::debug "Concatenating ${#moStack[@]} stack items"
@@ -1323,22 +1329,30 @@ mo::standaloneProcess() {
 
 # Internal: Apply indentation before any line that has content in MO_UNPARSED.
 #
-# $1 - The indentation string
+# $1 - Destination variable name.
+# $2 - The indentation string.
+# $3 - The content that needs the indentation string prepended on each line.
 #
 # Returns nothing.
 mo::indentLines() {
     local moContent moIndentation moResult moN moR moChunk
 
-    moIndentation=$1
+    moIndentation=$2
+    moContent=$3
 
-    if [[ -z "$moIndentation" ]] || [[ -z "$MO_UNPARSED" ]]; then
-        mo::debug "Not applying indentation, indentation ${#moIndentation} bytes, content ${#MO_UNPARSED} bytes"
+    if [[ -z "$moIndentation" ]]; then
+        mo::debug "Not applying indentation, empty indentation"
 
-        return
+        local "$1" && mo::indirect "$1" "$moContent"
     fi
 
-    moContent=$MO_UNPARSED
-    MO_UNPARSED=
+    if [[ -z "$moContent" ]]; then
+        mo::debug "Not applying indentation, empty contents"
+
+        local "$1" && mo::indirect "$1" "$moContent"
+    fi
+
+    moResult=
     moN=$'\n'
     moR=$'\r'
 
@@ -1350,12 +1364,14 @@ mo::indentLines() {
         moContent=${moContent:${#moChunk}}
 
         if [[ -n "$moChunk" ]]; then
-            MO_UNPARSED="$MO_UNPARSED$moIndentation$moChunk"
+            moResult="$moResult$moIndentation$moChunk"
         fi
 
-        MO_UNPARSED="$MO_UNPARSED${moContent:0:1}"
+        moResult="$moResult${moContent:0:1}"
         moContent=${moContent:1}
     done
+
+    local "$1" && mo::indirect "$1" "$moResult"
 }
 
 
@@ -1608,7 +1624,7 @@ mo::getContentWithinTag() {
     moUnparsed=${MO_UNPARSED}
     mo::tokenizeTagContents moTokens "$MO_CLOSE_DELIMITER"
     MO_UNPARSED=${MO_UNPARSED#"$MO_CLOSE_DELIMITER"}
-    mo::tokensToString moTokensString "${moTokens[@]}"
+    mo::tokensToString moTokensString "${moTokens[@]:1}"
     moParsed=${moUnparsed:0:$((${#moUnparsed} - ${#MO_UNPARSED}))}
 
     local "$1" && mo::indirectArray "$1" "$moParsed" "$moTokensString"
@@ -1621,20 +1637,22 @@ mo::getContentWithinTag() {
 # $1 - Destination variable for the array of contents.
 # $2 - Stop processing when this content is found.
 #
-# The list of tokens are in RPN form
+# The list of tokens are in RPN form. The first item in the resulting array is
+# the number of actual tokens (after combining command tokens) in the list.
 #
 # Given: a 'bc' "de\"\n" (f {g 'h'})
-# Result: ([0]=NAME [1]=a [2]=VALUE [3]=bc [4]=VALUE [5]=$'de\"\n'
-# [6]=NAME [7]=f [8]=NAME [9]=g [10]=VALUE [11]=h
-# [12]=BRACE [13]=2 [14]=PAREN [15]=2
+# Result: ([0]=4 [1]=NAME [2]=a [3]=VALUE [4]=bc [5]=VALUE [6]=$'de\"\n'
+# [7]=NAME [8]=f [9]=NAME [10]=g [11]=VALUE [12]=h
+# [13]=BRACE [14]=2 [15]=PAREN [16]=2
 #
 # Returns nothing
 mo::tokenizeTagContents() {
-    local moResult moTerminator moTemp moUnparsedOriginal
+    local moResult moTerminator moTemp moUnparsedOriginal moTokenCount
 
     moTerminator=$2
     moResult=()
     moUnparsedOriginal=$MO_UNPARSED
+    moTokenCount=0
     mo::debug "Tokenizing tag contents until terminator: $moTerminator"
 
     while true; do
@@ -1647,7 +1665,7 @@ mo::tokenizeTagContents() {
 
             "$moTerminator"*)
                 mo::debug "Found terminator"
-                local "$1" && mo::indirectArray "$1" "${moResult[@]}"
+                local "$1" && mo::indirectArray "$1" "$moTokenCount" "${moResult[@]}"
                 return
                 ;;
 
@@ -1655,7 +1673,7 @@ mo::tokenizeTagContents() {
                 # Do not tokenize the open paren - treat this as RPL
                 MO_UNPARSED=${MO_UNPARSED:1}
                 mo::tokenizeTagContents moTemp ')'
-                moResult=("${moResult[@]}" "${moTemp[@]}" PAREN "$((${#moTemp[@]} / 2))")
+                moResult=("${moResult[@]}" "${moTemp[@]:1}" PAREN "${moTemp[0]}")
                 MO_UNPARSED=${MO_UNPARSED:1}
                 ;;
 
@@ -1663,7 +1681,7 @@ mo::tokenizeTagContents() {
                 # Do not tokenize the open brace - treat this as RPL
                 MO_UNPARSED=${MO_UNPARSED:1}
                 mo::tokenizeTagContents moTemp '}'
-                moResult=("${moResult[@]}" "${moTemp[@]}" BRACE "$((${#moTemp[@]} / 2))")
+                moResult=("${moResult[@]}" "${moTemp[@]:1}" BRACE "${moTemp[0]}")
                 MO_UNPARSED=${MO_UNPARSED:1}
                 ;;
 
@@ -1688,6 +1706,7 @@ mo::tokenizeTagContents() {
         esac
 
         mo::debug "Got chunk: ${moTemp[0]} ${moTemp[1]}"
+        moTokenCount=$((moTokenCount + 1))
     done
 }
 
@@ -1701,10 +1720,10 @@ mo::tokenizeTagContentsName() {
     local moTemp
 
     mo::chomp moTemp "${MO_UNPARSED%%"$MO_CLOSE_DELIMITER"*}"
-    moTemp=${moTemp##(*}
-    moTemp=${moTemp##)*}
-    moTemp=${moTemp##\{*}
-    moTemp=${moTemp##\}*}
+    moTemp=${moTemp%%(*}
+    moTemp=${moTemp%%)*}
+    moTemp=${moTemp%%\{*}
+    moTemp=${moTemp%%\}*}
     MO_UNPARSED=${MO_UNPARSED:${#moTemp}}
     mo::trimUnparsed
     mo::debug "Parsed default token: $moTemp"
@@ -1724,6 +1743,7 @@ mo::tokenizeTagContentsDoubleQuote() {
 
     moUnparsedOriginal=$MO_UNPARSED
     MO_UNPARSED=${MO_UNPARSED:1}
+    moResult=
     mo::debug "Getting double quoted tag contents"
 
     while true; do
@@ -1734,22 +1754,43 @@ mo::tokenizeTagContentsDoubleQuote() {
         case "$MO_UNPARSED" in
             '"'*)
                 MO_UNPARSED=${MO_UNPARSED:1}
-                local "$1" && mo::indirect "$1" "VALUE" "$moResult"
+                local "$1" && mo::indirectArray "$1" "VALUE" "$moResult"
                 return
                 ;;
 
-            \\n)
+            \\b*)
+                moResult="$moResult"$'\b'
+                MO_UNPARSED=${MO_UNPARSED:2}
+                ;;
+
+            \\e*)
+                # Note, \e is ESC, but in Bash $'\E' is ESC.
+                moResult="$moResult"$'\E'
+                MO_UNPARSED=${MO_UNPARSED:2}
+                ;;
+
+            \\f*)
+                moResult="$moResult"$'\f'
+                MO_UNPARSED=${MO_UNPARSED:2}
+                ;;
+
+            \\n*)
                 moResult="$moResult"$'\n'
                 MO_UNPARSED=${MO_UNPARSED:2}
                 ;;
 
-            \\r)
+            \\r*)
                 moResult="$moResult"$'\r'
                 MO_UNPARSED=${MO_UNPARSED:2}
                 ;;
 
-            \\t)
+            \\t*)
                 moResult="$moResult"$'\t'
+                MO_UNPARSED=${MO_UNPARSED:2}
+                ;;
+
+            \\v*)
+                moResult="$moResult"$'\v'
                 MO_UNPARSED=${MO_UNPARSED:2}
                 ;;
 
@@ -1759,7 +1800,7 @@ mo::tokenizeTagContentsDoubleQuote() {
                 ;;
 
             *)
-                moResult=${MO_UNPARSED:0:1}
+                moResult="$moResult${MO_UNPARSED:0:1}"
                 MO_UNPARSED=${MO_UNPARSED:1}
                 ;;
         esac
@@ -1778,6 +1819,7 @@ mo::tokenizeTagContentsSingleQuote() {
 
     moUnparsedOriginal=$MO_UNPARSED
     MO_UNPARSED=${MO_UNPARSED:1}
+    moResult=
     mo::debug "Getting single quoted tag contents"
 
     while true; do
@@ -1793,7 +1835,7 @@ mo::tokenizeTagContentsSingleQuote() {
                 ;;
 
             *)
-                moResult=${MO_UNPARSED:0:1}
+                moResult="$moResult${MO_UNPARSED:0:1}"
                 MO_UNPARSED=${MO_UNPARSED:1}
                 ;;
         esac
