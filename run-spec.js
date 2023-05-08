@@ -9,7 +9,8 @@ const fsPromises = require("fs").promises;
 // To skip a test, define a "skip" property and explain why the test is
 // skipped.
 //
-// To override any test property, just define that property.
+// To override any test property, just define that property. It replaces the
+// original property, not augmenting it.
 const testOverrides = {
     "Comments -> Variable Name Collision": {
         // Can't use variables with exclamation points easily
@@ -17,14 +18,66 @@ const testOverrides = {
             comment: 4
         }
     },
+    "Interpolation -> Dotted Names - Arbitrary Depth": {
+        skip: "Not able to use more than one level of depth"
+    },
+    "Interpolation -> Dotted Names - Broken Chain Resolution": {
+        data: {
+            a: {
+                b: "wrong"
+            },
+            name: "Jim"
+        },
+        template: '"{{a.name}}" == ""'
+    },
+    "Interpolation -> Dotted Names - Initial Resolution": {
+        data: {
+            a: {
+                name: "Phil"
+            },
+            name: "Wrong"
+        },
+        template: "\"{{#a}}{{name}}{{/a}}\" == \"Phil\""
+    },
+    "Interpolation -> Implicit Iterators - Ampersand": {
+        skip: "HTML escaping is not supported"
+    },
+    "Interpolation -> Implicit Iterators - Basic Interpolation": {
+        skip: "Can not use {{.}} outside of a loop. Need to use a variable name."
+    },
+    "Interpolation -> Implicit Iterators - Basic Integer Interpolation": {
+        skip: "Can not use {{.}} outside of a loop. Need to use a variable name."
+    },
+    "Interpolation -> Implicit Iterators - Triple Mustache": {
+        skip: "Can not use {{.}} outside of a loop. Need to use a variable name."
+    },
     "Interpolation -> HTML Escaping": {
         skip: "HTML escaping is not supported"
     },
     "Interpolation -> Implicit Iterators - HTML Escaping": {
         skip: "HTML escaping is not supported"
     },
+    "Inverted -> Dotted Names - Falsey": {
+        data: {
+            a: {
+                b: ""
+            }
+        },
+        template: '"{{^a.b}}Not Here{{/a.b}}" == "Not Here"'
+    },
+    "Inverted -> Dotted Names - Truthy": {
+        data: {
+            a: {
+                b: "1"
+            }
+        },
+        template: '"{{^a.b}}Not Here{{/a.b}}" == ""'
+    },
     "Lambdas -> Escaping": {
         skip: "HTML escaping is not supported"
+    },
+    "Lambdas -> Interpolation - Alternate Delimiters": {
+        skip: "There is no difference between a lamba used as a value and a lambda used as a block. Both will parse using the current delimiters."
     },
     "Lambdas -> Inverted Section": {
         // This one passed mostly by accident. Correcting so the test still
@@ -37,12 +90,51 @@ const testOverrides = {
             }
         }
     },
+    "Lambdas -> Interpolation": {
+        data: {
+            lambda: {
+                __tag__: 'code',
+                bash: 'echo -n "world"'
+            }
+        }
+    },
+    "Lambdas -> Interpolation - Expansion": {
+        data: {
+            lambda: {
+                __tag__: 'code',
+                bash: 'mo::parse result "{{planet}}"; echo -n "$result"'
+            },
+            planet: 'world'
+        }
+    },
+    "Lambdas -> Interpolation - Multiple Calls": {
+        skip: "Calls are not cached, but they run in isolated environments, so saving a global variable does not work."
+    },
+    "Lambdas -> Section": {
+        data: {
+            lambda: {
+                __tag__: 'code',
+                bash: 'if [[ "$(cat)" == "{{x}}" ]]; then echo -n yes; else echo -n no; fi'
+            },
+            x: "Error!"
+        }
+    },
     "Lambdas -> Section - Alternate Delimiters": {
         data: {
             lambda: {
                 __tag__: 'code',
-                bash: 'content=$(cat); echo -n "$content{{planet}}=>|planet|$content"'
-            }
+                bash: 'local content=$(cat); mo::parse content "$content{{planet}} => |planet|$content"; echo -n "$content"'
+            },
+            planet: 'Earth'
+        }
+    },
+    "Lambdas -> Section - Expansion": {
+        data: {
+            lambda: {
+                __tag__: 'code',
+                bash: 'local content=$(cat); mo::parse content "$content{{planet}}$content"; echo -n "$content"'
+            },
+            planet: "Earth"
         }
     },
     "Lambdas -> Section - Multiple Calls": {

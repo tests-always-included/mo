@@ -188,20 +188,67 @@ myfunc() {
 }
 ```
 
+### Triple Mustache, Parenthesis, and Quotes
+
+Normally, triple mustache syntax, such as `{{{var}}}` will avoid HTML escaping of the variable. Because HTML escaping is not supported in `mo`, this is now used differently. Anything within braces will be looked up and the values will be concatenated together and the result will be treated as a value. Anything in parenthesis will be looked up, concatenated, and treated as a name. Also, anything in single quotes is passed as a value; double quoted things first are unescaped and then passed as a value.
+
+```
+# Example input
+var=abc
+user=admin
+admin=Administrator
+u=user
+abc=([0]=zero [1]=one [2]=two)
+```
+
+| Mustache syntax | Resulting output | Notes |
+|-----------------|------------------|-------|
+| `{{var}}` | `abc` | Normal behavior |
+| `{{var us}}` | `abcus` | Concatenation |
+| `{{'var'}}` | `var` | Passing as a value |
+| `{{"a\tb"}}` | `a       b` | There was an escaped tab in the value |
+| `{{u}}` | `user` | Normal behavior |
+| `{{{u}}}` | `user` | Look up "$u", treat as the value `{{'user'}}` |
+| `{{(u)}}` | `admin` | Look up "$u", treat as the name `{{user}}` |
+| `{{var user}}` | `abcuser` | Concatenation |
+| `{{(var '.1')}}` | `one` | Look up "$var", treat as "abc", then concatenate ".1" and look up `{{abc.1}}` |
+
+In double-quoted strings, the following escape sequences are defined.
+
+* `\"` - Quote
+* `\b` - Bell
+* `\e` - Escape (note that Bash typically uses $'\E' for the same thing)
+* `\f` - Form feed
+* `\n` - Newline
+* `\r` - Carriage return
+* `\t` - Tab
+* `\v` - Vertical tab
+* Anything else will skip the `\` and place the next character. However, this implementation is allowed to change in the future if a different escape character mapping becomes commonplace.
+
 
 Environment Variables and Functions
 -----------------------------------
 
 There are several functions and variables used to process templates. `mo` reserves variables that start with `MO_` for variables exposing data or configuration, functions starting with `mo::`, and local variables starting with `mo[A-Z]`. You are welcome to use internal functions, though only ones that are marked as "Public" should not change their interface. Scripts may also read any of the variables.
 
-* `MO_ALLOW_FUNCTION_ARGUMENTS` - When set to a non-empty value, this allows functions referenced in templates to receive additional options and arguments. This puts the content from the template directly into an eval statement. Use with extreme care.
+Functions are all executed in a subshell, with another subshell for lambdas. Thus, your lambda can't affect the parsing of a template. There's more information about lambdas when talking about tests that fail.
+
+* `MO_ALLOW_FUNCTION_ARGUMENTS` - When set to a non-empty value, this allows functions referenced in templates to receive additional options and arguments.
+* `MO_CLOSE_DELIMITER` - The string used when closing a tag. Defaults to "}}". Used internally.
+* `MO_CLOSE_DELIMITER_DEFAULT` - The default value of `MO_CLOSE_DELIMITER`. Used when resetting the close delimiter, such as when parsing a partial.
+* `MO_CURRENT` - Variable name to use for ".".
 * `MO_DEBUG` - When set to a non-empty value, additional debug information is written to stderr.
 * `MO_FUNCTION_ARGS` - Arguments passed to the function.
+* `MO_FAIL_ON_FILE` - If a filename from the command-line is missing or a partial does not exist, abort with an error.
 * `MO_FAIL_ON_FUNCTION` - If a function returns a non-zero status code, abort with an error.
 * `MO_FAIL_ON_UNSET` - When set to a non-empty value, expansion of an unset env variable will be aborted with an error.
 * `MO_FALSE_IS_EMPTY` - When set to a non-empty value, the string "false" will be treated as an empty value for the purposes of conditionals.
+* `MO_OPEN_DELIMITER` - The string used when opening a tag. Defaults to "{{". Used internally.
+* `MO_OPEN_DELIMITER_DEFAULT` - The default value of MO_OPEN_DELIMITER. Used when resetting the open delimiter, such as when parsing a partial.
 * `MO_ORIGINAL_COMMAND` - Used to find the `mo` program in order to generate a help message.
-* `MO_VERSION` - Version of `mo`.
+* `MO_PARSED` - Content that has made it through the template engine.
+* `MO_STANDALONE_CONTENT` - The unparsed content that preceeded the current tag. When a standalone tag is encountered, this is checked to see if it only contains whitespace. If this and the whitespace condition after a tag is met, then this will be reset to $'\n'.
+* `MO_UNPARSED` - Template content yet to make it through the parser.
 
 
 Concessions
@@ -238,16 +285,41 @@ When submitting patches, make sure to run them past [ShellCheck] and ensure no p
 
 ### Porting and Backporting
 
-There is a diagnostic script that is aimed to help at making sure the internal functions all work when testing the script out on a version of bash or in an environment that is causing issues.  When adding new functions, please make sure this script gets updated to properly test your code.
+In case of problems, setting MO_DEBUG to a non-empty value will give you LOTS of output.
+
+    MO_DEBUG=1 ./mo my-template
 
 
 ### Failed Specs
 
-It is acceptable for some of the official spec tests to fail.  Anything dealing with multiple levels of objects (eg. `{{a.b.c}}`) and changing the delimiters (`{{= | | =}}`) will fail.  Other than that, this bash implementation of the mustache spec should pass tests.
+It is acceptable for some of the official spec tests to fail. The spec runner has specific exclusions and overrides to test similar functionality that avoid the following issues.
 
-Specific issues:
- * Interpolation - Multiple Calls:  This fails because lambdas execute in a subshell so their output can be captured.  This is flagged as a TODO in the code.
+ * Using `{{.}}` outside of a loop - In order to access any variable, you must use its name. In a loop, `{{.}}` will refer to the current value, but outside the loop you are unable to use this dot notation because there is no current value.
+ * Deeply nested data - Bash doesn't support complex data structure. Basically, just strings and arrays of strings.
+ * Interpolation; Multiple Calls:  This fails because lambdas execute in a subshell so their output can be captured. If you want state to be preserved, you will need to write it outside of the current environment and load it again later.
  * HTML Escaping - Since bash is not often executed in a web server context, it makes no sense to have the output escaped as HTML.  Performing shell escaping of variables may be an option in the future if there's a demand.
+ * Lambdas - Function results are *not* automatically interpreted again. If you want to parse the results as Mustache content, use `mo::parse`. When they use `mo::parse`, it will use the current delimiters.
+
+ For lambdas, these examples may help.
+
+ ```bash
+ # Retrieve content into a variable.
+ content=$(cat)
+
+ # Retrieve all content and do not trim newlines at the end.
+ content=$(cat; echo -n '.')
+ content=${content%.}
+
+ # Parse content using the current delimiters
+ mo::parse results "This is my content. Hello, {{username}}"
+ echo -n "$results"
+
+ # Parse content using the default delimiters
+ MO_OPEN_DELIMITER=$MO_OPEN_DELIMITER_DEFAULT
+ MO_CLOSE_DELIMITER=$MO_CLOSE_DELIMITER_DEFAULT
+ mo::parse results "This is my content. Hello, {{username}}"
+ echo -n "$results"
+ ```
 
 
 ### Future Enhancements

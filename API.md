@@ -12,131 +12,86 @@ Public: Template parser function.  Writes templates to stdout.
 * $0 - Name of the mo file, used for getting the help message.
 * $@ - Filenames to parse.
 
-Options:
+Returns nothing.
 
-      --allow-function-arguments
 
-Permit functions in templates to be called with additional arguments.  This puts template data directly in to the path of an eval statement. Use with caution. Not listed in the help because it only makes sense when mo is sourced.
+`mo::debug()`
+-------------
 
-      -u, --fail-not-set
+Internal: Show a debug message
 
-Fail upon expansion of an unset variable.  Default behavior is to silently ignore and expand into empty string.
-
-      -x, --fail-on-function
-
-Fail when a function used by a template returns an error status code. Alternately, ou may set the MO_FAIL_ON_FUNCTION environment variable to a non-empty value to enable this behavior.
-
-      -e, --false
-
-Treat "false" as an empty value.  You may set the MO_FALSE_IS_EMPTY environment variable instead to a non-empty value to enable this behavior.
-
-      -h, --help
-
-Display a help message.
-
-      -s=FILE, --source=FILE
-
-Source a file into the environment before processing template files. This can be used multiple times.
-
-      --
-
-Used to indicate the end of options.  You may optionally use this when filenames may start with two hyphens.
-
-Mo uses the following environment variables:
-
-* MO_ALLOW_FUNCTION_ARGUMENTS - When set to a non-empty value, this allows functions referenced in templates to receive additional options and arguments. This puts the content from the template directly into an eval statement. Use with extreme care.
-* MO_FUNCTION_ARGS - Arguments passed to the function
-* MO_FAIL_ON_FUNCTION - If a function returns a non-zero status code, abort with an error.
-* MO_FAIL_ON_UNSET - When set to a non-empty value, expansion of an unset env variable will be aborted with an error.
-* MO_FALSE_IS_EMPTY - When set to a non-empty value, the string "false" will be treated as an empty value for the purposes of conditionals.
-* MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate a help message.
+* $1 - The debug message to show
 
 Returns nothing.
 
 
-`moCallFunction()`
-------------------
+`mo::debugShowState()`
+----------------------
 
-Internal: Call a function.
+Internal: Show a debug message and internal state information
 
-* $1 - Variable for output
-* $2 - Function to call
-* $3 - Content to pass
-* $4 - Additional arguments as a single string
-
-This can be dangerous, especially if you are using tags like {{someFunction ; rm -rf / }}
+No arguments
 
 Returns nothing.
 
 
-`moFindEndTag()`
-----------------
+`mo::error()`
+-------------
 
-Internal: Scan content until the right end tag is found.  Creates an array with the following members:
+Internal: Show an error message and exit
 
-    [0] = Content before end tag
-    [1] = End tag (complete tag)
-    [2] = Content after end tag
+* $1 - The error message to show
+* $2 - Error code
 
-Everything using this function uses the "standalone tags" logic.
-
-* $1 - Name of variable for the array
-* $2 - Content
-* $3 - Name of end tag
-* $4 - If -z, do standalone tag processing before finishing
-
-Returns nothing.
+Returns nothing. Exits the program.
 
 
-`moFindString()`
-----------------
-
-Internal: Find the first index of a substring.  If not found, sets the index to -1.
-
-* $1 - Destination variable for the index
-* $2 - Haystack
-* $3 - Needle
-
-Returns nothing.
-
-
-`moFullTagName()`
+`mo::errorNear()`
 -----------------
 
-Internal: Generate a dotted name based on current context and target name.
+Internal: Show an error message with a snippet of context and exit
 
-* $1 - Target variable to store results
-* $2 - Context name
-* $3 - Desired variable name
+* $1 - The error message to show
+* $2 - The starting point
+* $3 - Error code
+
+Returns nothing. Exits the program.
+
+
+`mo::usage()`
+-------------
+
+Internal: Displays the usage for mo.  Pulls this from the file that contained the `mo` function.  Can only work when the right filename comes is the one argument, and that only happens when `mo` is called with `$0` set to this file.
+
+* $1 - Filename that has the help message
 
 Returns nothing.
 
 
-`moGetContent()`
+`mo::content()`
+---------------
+
+Internal: Fetches the content to parse into MO_UNPARSED.  Can be a list of partials for files or the content from stdin.
+
+* $1 - Destination variable name
+* $2-@ - File names (optional), read from stdin otherwise
+
+Returns nothing.
+
+
+`mo::contentFile()`
+-------------------
+
+Internal: Read a file into MO_UNPARSED.
+
+* $1 - Destination variable name.
+* $2 - Filename to load - if empty, defaults to /dev/stdin
+
+Returns nothing.
+
+
+`mo::indirect()`
 ----------------
-
-Internal: Fetches the content to parse into a variable.  Can be a list of partials for files or the content from stdin.
-
-* $1   - Variable name to assign this content back as
-* $2-@ - File names (optional)
-
-Returns nothing.
-
-
-`moIndentLines()`
------------------
-
-Internal: Indent a string, placing the indent at the beginning of every line that has any content.
-
-* $1 - Name of destination variable to get an array of lines
-* $2 - The indent string
-* $3 - The string to reindent
-
-Returns nothing.
-
-
-`moIndirect()`
---------------
 
 Internal: Send a variable up to the parent of the caller of this function.
 
@@ -146,7 +101,7 @@ Internal: Send a variable up to the parent of the caller of this function.
 Examples
 
     callFunc () {
-        local "$1" && moIndirect "$1" "the value"
+        local "$1" && mo::indirect "$1" "the value"
     }
     callFunc dest
     echo "$dest"  # writes "the value"
@@ -154,19 +109,19 @@ Examples
 Returns nothing.
 
 
-`moIndirectArray()`
--------------------
+`mo::indirectArray()`
+---------------------
 
 Internal: Send an array as a variable up to caller of a function
 
-* $1   - Variable name
+* $1 - Variable name
 * $2-@ - Array elements
 
 Examples
 
     callFunc () {
         local myArray=(one two three)
-        local "$1" && moIndirectArray "$1" "${myArray[@]}"
+        local "$1" && mo::indirectArray "$1" "${myArray[@]}"
     }
     callFunc dest
     echo "${dest[@]}" # writes "one two three"
@@ -174,8 +129,155 @@ Examples
 Returns nothing.
 
 
-`moIsArray()`
+`mo::trimUnparsed()`
+--------------------
+
+Internal: Trim leading characters from MO_UNPARSED
+
+Returns nothing.
+
+
+`mo::chomp()`
 -------------
+
+Internal: Remove whitespace and content after whitespace
+
+* $1 - Name of the destination variable
+* $2 - The string to chomp
+
+Returns nothing.
+
+
+`mo::parse()`
+-------------
+
+Public: Parses text, interpolates mustache tags. Utilizes the current value of MO_OPEN_DELIMITER, MO_CLOSE_DELIMITER, and MO_STANDALONE_CONTENT. Those three variables shouldn't be changed by user-defined functions.
+
+* $1 - Destination variable name - where to store the finished content
+* $2 - Content to parse
+* $3 - Preserve standalone status/content - truthy if not empty. When set to a value, that becomes the standalone content value
+
+Returns nothing.
+
+
+`mo::parseInternal()`
+---------------------
+
+Internal: Parse MO_UNPARSED, writing content to MO_PARSED. Interpolates mustache tags.
+
+No arguments
+
+Returns nothing.
+
+
+`mo::parseBlock()`
+------------------
+
+Internal: Handle parsing a block
+
+* $1 - Invert condition ("true" or "false")
+
+Returns nothing
+
+
+`mo::parseBlockFunction()`
+--------------------------
+
+Internal: Handle parsing a block whose first argument is a function
+
+* $1 - Invert condition ("true" or "false")
+* $2-@ - The parsed tokens from inside the block tags
+
+Returns nothing
+
+
+`mo::parseBlockArray()`
+-----------------------
+
+Internal: Handle parsing a block whose first argument is an array
+
+* $1 - Invert condition ("true" or "false")
+* $2-@ - The parsed tokens from inside the block tags
+
+Returns nothing
+
+
+`mo::parseBlockValue()`
+-----------------------
+
+Internal: Handle parsing a block whose first argument is a value
+
+* $1 - Invert condition ("true" or "false")
+* $2-@ - The parsed tokens from inside the block tags
+
+Returns nothing
+
+
+`mo::parsePartial()`
+--------------------
+
+Internal: Handle parsing a partial
+
+No arguments.
+
+Indentation will be applied to the entire partial's contents before parsing. This indentation is based on the whitespace that ends the previously parsed content.
+
+Returns nothing
+
+
+`mo::parseComment()`
+--------------------
+
+Internal: Handle parsing a comment
+
+No arguments.
+
+Returns nothing
+
+
+`mo::parseDelimiter()`
+----------------------
+
+Internal: Handle parsing the change of delimiters
+
+No arguments.
+
+Returns nothing
+
+
+`mo::parseValue()`
+------------------
+
+Internal: Handle parsing value or function call
+
+No arguments.
+
+Returns nothing
+
+
+`mo::isFunction()`
+------------------
+
+Internal: Determine if the given name is a defined function.
+
+* $1 - Function name to check
+
+Be extremely careful.  Even if strict mode is enabled, it is not honored in newer versions of Bash.  Any errors that crop up here will not be caught automatically.
+
+Examples
+
+    moo () {
+        echo "This is a function"
+    }
+    if mo::isFunction moo; then
+        echo "moo is a defined function"
+    fi
+
+Returns 0 if the name is a function, 1 otherwise.
+
+
+`mo::isArray()`
+---------------
 
 Internal: Determine if a given environment variable exists and if it is an array.
 
@@ -194,231 +296,312 @@ Examples
 Returns 0 if the name is not empty, 1 otherwise.
 
 
-`moIsFunction()`
-----------------
+`mo::isArrayIndexValid()`
+-------------------------
 
-Internal: Determine if the given name is a defined function.
+Internal: Determine if an array index exists.
 
-* $1 - Function name to check
+* $1 - Variable name to check
+* $2 - The index to check
 
-Be extremely careful.  Even if strict mode is enabled, it is not honored in newer versions of Bash.  Any errors that crop up here will not be caught automatically.
+Has to check if the variable is an array and if the index is valid for that type of array.
 
-Examples
+Returns true (0) if everything was ok, 1 if there's any condition that fails.
 
-    moo () {
-        echo "This is a function"
-    }
-    if moIsFunction moo; then
-        echo "moo is a defined function"
-    fi
 
-Returns 0 if the name is a function, 1 otherwise.
-
-
-`moIsStandalone()`
-------------------
-
-Internal: Determine if the tag is a standalone tag based on whitespace before and after the tag.
-
-Passes back a string containing two numbers in the format "BEFORE AFTER" like "27 10".  It indicates the number of bytes remaining in the "before" string (27) and the number of bytes to trim in the "after" string (10). Useful for string manipulation:
-
-* $1 - Variable to set for passing data back
-* $2 - Content before the tag
-* $3 - Content after the tag
-* $4 - true/false: is this the beginning of the content?
-
-Examples
-
-    moIsStandalone RESULT "$before" "$after" false || return 0
-    RESULT_ARRAY=( $RESULT )
-    echo "${before:0:${RESULT_ARRAY[0]}}...${after:${RESULT_ARRAY[1]}}"
-
-Returns nothing.
-
-
-`moJoin()`
-----------
-
-Internal: Join / implode an array
-
-* $1    - Variable name to receive the joined content
-* $2    - Joiner
-* $3-$* - Elements to join
-
-Returns nothing.
-
-
-`moLoadFile()`
---------------
-
-Internal: Read a file into a variable.
-
-* $1 - Variable name to receive the file's content
-* $2 - Filename to load - if empty, defaults to /dev/stdin
-
-Returns nothing.
-
-
-`moLoop()`
-----------
-
-Internal: Process a chunk of content some number of times.  Writes output to stdout.
-
-* $1   - Content to parse repeatedly
-* $2   - Tag prefix (context name)
-* $3-@ - Names to insert into the parsed content
-
-Returns nothing.
-
-
-`moParse()`
------------
-
-Internal: Parse a block of text, writing the result to stdout.
-
-* $1 - Block of text to change
-* $2 - Current name (the variable NAME for what {{.}} means)
-* $3 - true when no content before this, false otherwise
-
-Returns nothing.
-
-
-`moArgs`
---------
-
-Split arguments from the tag name. Arguments are passed to functions.
-
-
-`moPartial()`
--------------
-
-Internal: Process a partial.
-
-Indentation should be applied to the entire partial.
-
-This sends back the "is beginning" flag because the newline after a standalone partial is consumed. That newline is very important in the middle of content. We send back this flag to reset the processing loop's `moIsBeginning` variable, so the software thinks we are back at the beginning of a file and standalone processing continues to work.
-
-Prefix all variables.
-
-* $1 - Name of destination variable. Element [0] is the content, [1] is the true/false flag indicating if we are at the beginning of content.
-* $2 - Content before the tag that was not yet written
-* $3 - Tag content
-* $4 - Content after the tag
-* $5 - true/false: is this the beginning of the content?
-* $6 - Current context name
-
-Returns nothing.
-
-
-`moShow()`
-----------
-
-Internal: Show an environment variable or the output of a function to stdout.
-
-Limit/prefix any variables used.
-
-* $1 - Name of environment variable or function
-* $2 - Current context
-* $3 - Arguments string if $1 is a function
-
-Returns nothing.
-
-
-`moSplit()`
------------
-
-Internal: Split a larger string into an array.
-
-* $1 - Destination variable
-* $2 - String to split
-* $3 - Starting delimiter
-* $4 - Ending delimiter (optional)
-
-Returns nothing.
-
-
-`moStandaloneAllowed()`
------------------------
-
-Internal: Handle the content for a standalone tag.  This means removing whitespace (not newlines) before a tag and whitespace and a newline after a tag.  That is, assuming, that the line is otherwise empty.
-
-* $1 - Name of destination "content" variable.
-* $2 - Content before the tag that was not yet written
-* $3 - Tag content (not used)
-* $4 - Content after the tag
-* $5 - true/false: is this the beginning of the content?
-
-Returns nothing.
-
-
-`moStandaloneDenied()`
-----------------------
-
-Internal: Handle the content for a tag that is never "standalone".  No adjustments are made for newlines and whitespace.
-
-* $1 - Name of destination "content" variable.
-* $2 - Content before the tag that was not yet written
-* $3 - Tag content (not used)
-* $4 - Content after the tag
-
-Returns nothing.
-
-
-`moTest()`
-----------
-
-Internal: Determines if the named thing is a function or if it is a non-empty environment variable.  When MO_FALSE_IS_EMPTY is set to a non-empty value, then "false" is also treated is an empty value.
-
-Do not use variables without prefixes here if possible as this needs to check if any name exists in the environment
-
-* $1                - Name of environment variable or function
-* $2                - Current value (our context)
-* MO_FALSE_IS_EMPTY - When set to a non-empty value, this will say the string value "false" is empty.
-
-Returns 0 if the name is not empty, 1 otherwise.  When MO_FALSE_IS_EMPTY is set, this returns 1 if the name is "false".
-
-
-`moTestVarSet()`
+`mo::isVarSet()`
 ----------------
 
 Internal: Determine if a variable is assigned, even if it is assigned an empty value.
 
 * $1 - Variable name to check.
 
+Can not use logic like this in case invalid variable names are passed.      [[ "${!1-a}" == "${!1-b}" ]]
+
 Returns true (0) if the variable is set, 1 if the variable is unset.
 
 
-`moTrimChars()`
----------------
+`mo::isTruthy()`
+----------------
 
-Internal: Trim the leading whitespace only.
+Internal: Determine if a value is considered truthy.
 
-* $1   - Name of destination variable
-* $2   - The string
-* $3   - true/false - trim front?
-* $4   - true/false - trim end?
-* $5-@ - Characters to trim
+* $1 - The value to test
+* $2 - Invert the value, either "true" or "false"
+
+Returns true (0) if truthy, 1 otherwise.
+
+
+`mo::evaluate()`
+----------------
+
+Internal: Convert token list to values
+
+* $1 - Destination variable name
+* $2-@ - Tokens to convert
+
+Sample call:
+
+      mo::evaluate dest NAME username VALUE abc123 PAREN 2
 
 Returns nothing.
 
 
-`moTrimWhitespace()`
---------------------
+`mo::evaluateListOfSingles()`
+-----------------------------
 
-Internal: Trim leading and trailing whitespace from a string.
+Internal: Convert an argument list to individual values.
 
-* $1 - Name of variable to store trimmed string
-* $2 - The string
+* $1 - Destination variable name
+* $2-@ - A list of argument types and argument name/value.
+
+This assumes each value is separate from the rest. In contrast, mo::evaluate will pass all arguments to a function if the first value is a function.
+
+Sample call:
+
+      mo::evaluateListOfSingles dest NAME username VALUE abc123
 
 Returns nothing.
 
 
-`moUsage()`
------------
+`mo::evaluateSingle()`
+----------------------
 
-Internal: Displays the usage for mo.  Pulls this from the file that contained the `mo` function.  Can only work when the right filename comes is the one argument, and that only happens when `mo` is called with `$0` set to this file.
+Internal: Evaluate a single argument
 
-* $1 - Filename that has the help message
+* $1 - Name of variable for result
+* $2 - Type of argument, either NAME or VALUE
+* $3 - Argument
+
+Returns nothing
+
+
+`mo::evaluateKey()`
+-------------------
+
+Internal: Return the value for @key based on current's name
+
+* $1 - Name of variable for result
+
+Returns nothing
+
+
+`mo::evaluateVariable()`
+------------------------
+
+Internal: Handle a variable name
+
+* $1 - Destination variable name
+* $2 - Variable name
+
+Returns nothing.
+
+
+`mo::findVariableName()`
+------------------------
+
+Internal: Find the name of a variable to use
+
+* $1 - Destination variable name, receives an array
+* $2 - Variable name from the template
+
+The array contains the following values
+    * [0] - Variable name
+    * [1] - Array index, or empty string
+
+Example variables      a="a"
+      b="b"
+      c=("c.0" "c.1")
+      d=([b]="d.b" [d]="d.d")
+
+Given these inputs (function input, current value), produce these outputs      a c => a
+      a c.0 => a
+      b d => d.b
+      b d.d => d.b
+      a d => d.a
+      a d.d => d.a
+      c.0 d => c.0
+      d.b d => d.b
+      '' c => c
+      '' c.0 => c.0
+ Returns nothing.
+
+
+`mo::join()`
+------------
+
+Internal: Join / implode an array
+
+* $1    - Variable name to receive the joined content
+* $2    - Joiner
+* $3-@ - Elements to join
+
+Returns nothing.
+
+
+`mo::evaluateFunction()`
+------------------------
+
+Internal: Call a function.
+
+* $1 - Variable for output
+* $2 - Content to pass
+* $3 - Function to call
+* $4-@ - Additional arguments as list of type, value/name
+
+Returns nothing.
+
+
+`mo::standaloneCheck()`
+-----------------------
+
+Internal: Check if a tag appears to have only whitespace before it and after it on a line. There must be a new line before and there must be a newline after or the end of a string
+
+No arguments.
+
+Returns 0 if this is a standalone tag, 1 otherwise.
+
+
+`mo::standaloneProcess()`
+-------------------------
+
+Internal: Process content before and after a tag. Remove prior whitespace up to the previous newline. Remove following whitespace up to and including the next newline.
+
+No arguments.
+
+Returns nothing.
+
+
+`mo::indentLines()`
+-------------------
+
+Internal: Apply indentation before any line that has content in MO_UNPARSED.
+
+* $1 - Destination variable name.
+* $2 - The indentation string.
+* $3 - The content that needs the indentation string prepended on each line.
+
+Returns nothing.
+
+
+`mo::escape()`
+--------------
+
+Internal: Escape a value
+
+* $1 - Destination variable name
+* $2 - Value to escape
+
+Returns nothing
+
+
+`mo::getContentUntilClose()`
+----------------------------
+
+Internal: Get the content up to the end of the block by minimally parsing and balancing blocks. Returns the content before the end tag to the caller and removes the content + the end tag from MO_UNPARSED. This can change the delimiters, adjusting MO_OPEN_DELIMITER and MO_CLOSE_DELIMITER.
+
+* $1 - Destination variable name
+* $2 - Token string to match for a closing tag
+
+Returns nothing.
+
+
+`mo::tokensToString()`
+----------------------
+
+Internal: Convert a list of tokens to a string
+
+* $1 - Destination variable for the string
+* $2-$@ - Token list
+
+Returns nothing.
+
+
+`mo::getContentTrim()`
+----------------------
+
+Internal: Trims content from MO_UNPARSED, returns trimmed content.
+
+* $1 - Destination variable
+
+Returns nothing.
+
+
+`mo::getContentComment()`
+-------------------------
+
+Get the content up to and including a close tag
+
+* $1 - Destination variable
+
+Returns nothing.
+
+
+`mo::getContentDelimiter()`
+---------------------------
+
+Get the content up to and including a close tag. First two non-whitespace tokens become the new open and close tag.
+
+* $1 - Destination variable
+
+Returns nothing.
+
+
+`mo::getContentWithinTag()`
+---------------------------
+
+Get the content up to and including a close tag. First two non-whitespace tokens become the new open and close tag.
+
+* $1 - Destination variable, an array
+* $2 - Terminator string
+
+The array contents:      [0] The raw content within the tag
+      [1] The parsed tokens as a single string
+
+Returns nothing.
+
+
+`mo::tokenizeTagContents()`
+---------------------------
+
+Internal: Parse MO_UNPARSED and retrieve the content within the tag delimiters. Converts everything into an array of string values.
+
+* $1 - Destination variable for the array of contents.
+* $2 - Stop processing when this content is found.
+
+The list of tokens are in RPN form. The first item in the resulting array is the number of actual tokens (after combining command tokens) in the list.
+
+Given: a 'bc' "de\"\n" (f {g 'h'}) Result: ([0]=4 [1]=NAME [2]=a [3]=VALUE [4]=bc [5]=VALUE [6]=$'de\"\n' [7]=NAME [8]=f [9]=NAME [10]=g [11]=VALUE [12]=h [13]=BRACE [14]=2 [15]=PAREN [16]=2
+
+Returns nothing
+
+
+`mo::tokenizeTagContentsName()`
+-------------------------------
+
+Internal: Get the contents of a variable name.
+
+* $1 - Destination variable name for the token list (array of strings)
+
+Returns nothing
+
+
+`mo::tokenizeTagContentsDoubleQuote()`
+--------------------------------------
+
+Internal: Get the contents of a tag in double quotes. Parses the backslash sequences.
+
+* $1 - Destination variable name for the token list (array of strings)
+
+Returns nothing.
+
+
+`mo::tokenizeTagContentsSingleQuote()`
+--------------------------------------
+
+Internal: Get the contents of a tag in single quotes. Only gets the raw value.
+
+* $1 - Destination variable name for the token list (array of strings)
 
 Returns nothing.
 

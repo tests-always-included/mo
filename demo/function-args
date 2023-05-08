@@ -24,8 +24,8 @@ TITLE() {
 
 cat <<EOF | mo -u
 {{TITLE 'Part 1'}}
-{{INCLUDE function-args-part1}}
+{{INCLUDE 'function-args-part1'}}
 
 {{TITLE 'Part 2'}}
-{{INCLUDE function-args-part2}}
+{{INCLUDE 'function-args-part2'}}
 EOF

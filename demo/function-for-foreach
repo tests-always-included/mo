@@ -9,6 +9,8 @@ foreach() {
 
     foreachContent=$(cat)
 
+    local x
+    x=("${@}")
     if [[ "$2" != "as" && "$2" != "in" ]]; then
         echo "Invalid foreach - bad format."
     elif [[ "$(declare -p "$1")" != "declare -"[aA]* ]]; then
@@ -41,8 +43,8 @@ links=(resque hub rip)
 # Process the template
 cat <<EOF | mo --allow-function-arguments
 Here are your links:
-{{#foreach links as link}}
+{{#foreach 'links' 'as' 'link'}}
  * [{{link.name}}]({{link.url}})
-{{/foreach}}
+{{/foreach 'links' 'as' 'link'}}
 
 EOF

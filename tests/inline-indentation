@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+export data="|"
+template() {
+    cat <<EOF
+  {{data}}  {{> fixtures/inline-indentation}}
+EOF
+}
+expected() {
+    cat <<EOF
+  |  >
+>
+
+EOF
+}
+
+runTest

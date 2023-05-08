@@ -44,6 +44,10 @@ Options:
    -s=FILE, --source=FILE
          Load FILE into the environment before processing templates.
          Can be used multiple times.
+   -o=DELIM, --open=DELIM
+         Set the opening delimiter. Default is "{{".
+   -c=DELIM, --close=DELIM
+         Set the closing delimiter. Default is "}}".
    --    Indicate the end of options. All arguments after this will be
          treated as filenames only. Use when filenames may start with
          hyphens.
@@ -54,6 +58,9 @@ MO_ALLOW_FUNCTION_ARGUMENTS - When set to a non-empty value, this allows
     functions referenced in templates to receive additional options and
     arguments.
 MO_CLOSE_DELIMITER - The string used when closing a tag. Defaults to "}}".
+    Used internally.
+MO_CLOSE_DELIMITER_DEFAULT - The default value of MO_CLOSE_DELIMITER. Used
+    when resetting the close delimiter, such as when parsing a partial.
 MO_CURRENT - Variable name to use for ".".
 MO_DEBUG - When set to a non-empty value, additional debug information is
     written to stderr.
@@ -67,11 +74,14 @@ MO_FAIL_ON_UNSET - When set to a non-empty value, expansion of an unset env
 MO_FALSE_IS_EMPTY - When set to a non-empty value, the string "false" will
     be treated as an empty value for the purposes of conditionals.
 MO_OPEN_DELIMITER - The string used when opening a tag. Defaults to "{{".
+    Used internally.
+MO_OPEN_DELIMITER_DEFAULT - The default value of MO_OPEN_DELIMITER. Used
+    when resetting the open delimiter, such as when parsing a partial.
 MO_ORIGINAL_COMMAND - Used to find the `mo` program in order to generate a
     help message.
 MO_PARSED - Content that has made it through the template engine.
-MO_STANDALONE_CONTENT - The content that preceeded the current tag. When a
-    standalone tag is encountered, this is checked to see if it only
+MO_STANDALONE_CONTENT - The unparsed content that preceeded the current tag.
+    When a standalone tag is encountered, this is checked to see if it only
     contains whitespace. If this and the whitespace condition after a tag is
     met, then this will be reset to $'\n'.
 MO_UNPARSED - Template content yet to make it through the parser.
