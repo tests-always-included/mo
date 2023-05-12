@@ -205,7 +205,7 @@ mo() (
     mo::debug "Debug enabled"
     MO_OPEN_DELIMITER="$MO_OPEN_DELIMITER_DEFAULT"
     MO_CLOSE_DELIMITER="$MO_CLOSE_DELIMITER_DEFAULT"
-    mo::content moContent "${moFiles[@]}" || return 1
+    mo::content moContent ${moFiles[@]+"${moFiles[@]}"} || return 1
     mo::parse moParsed "$moContent"
     echo -n "$moParsed"
 )
@@ -1947,7 +1947,7 @@ mo::tokenizeTagContentsSingleQuote() {
 
 # Save the original command's path for usage later
 MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)/${BASH_SOURCE[0]##*/}"
-MO_VERSION="3.0.0"
+MO_VERSION="3.0.1"
 
 # If sourced, load all functions.
 # If executed, perform the actions as expected.
