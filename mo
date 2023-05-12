@@ -1061,7 +1061,7 @@ mo::evaluate() {
                 ;;
 
             *)
-                moStack=("${moStack[@]}" "$1" "$2")
+                moStack=(${moStack[@]+"${moStack[@]}"} "$1" "$2")
                 ;;
         esac
 
@@ -1077,7 +1077,7 @@ mo::evaluate() {
     else
         #: Concatenate
         mo::debug "Concatenating ${#moStack[@]} stack items"
-        mo::evaluateListOfSingles moResult "${moStack[@]}"
+        mo::evaluateListOfSingles moResult ${moStack[@]+"${moStack[@]}"}
     fi
 
     local "$moTarget" && mo::indirect "$moTarget" "$moResult"
@@ -1310,10 +1310,12 @@ mo::evaluateFunction() {
     if [[ -n "${MO_ALLOW_FUNCTION_ARGUMENTS-}" ]]; then
         mo::debug "Function arguments are allowed"
 
-        for moTemp in "${moArgs[@]}"; do
-            mo::escape moTemp "$moTemp"
-            moFunctionCall="$moFunctionCall $moTemp"
-        done
+        if [[ ${#moArgs[@]} -gt 0 ]]; then
+            for moTemp in "${moArgs[@]}"; do
+                mo::escape moTemp "$moTemp"
+                moFunctionCall="$moFunctionCall $moTemp"
+            done
+        fi
     fi
 
     mo::debug "Calling function: $moFunctionCall"
@@ -1321,7 +1323,7 @@ mo::evaluateFunction() {
     #: Call the function in a subshell for safety. Employ the trick to preserve
     #: whitespace at the end of the output.
     moContent=$(
-        export MO_FUNCTION_ARGS=("${moArgs[@]}")
+        export MO_FUNCTION_ARGS=(${moArgs[@]+"${moArgs[@]}"})
         echo -n "$moContent" | eval "$moFunctionCall ; moFunctionResult=\$? ; echo -n '.' ; exit \"\$moFunctionResult\""
     ) || {
         moFunctionResult=$?
@@ -1767,7 +1769,7 @@ mo::tokenizeTagContents() {
 
             "$moTerminator"*)
                 mo::debug "Found terminator"
-                local "$1" && mo::indirectArray "$1" "$moTokenCount" "${moResult[@]}"
+                local "$1" && mo::indirectArray "$1" "$moTokenCount" ${moResult[@]+"${moResult[@]}"}
                 return
                 ;;
 
@@ -1775,7 +1777,7 @@ mo::tokenizeTagContents() {
                 #: Do not tokenize the open paren - treat this as RPL
                 MO_UNPARSED=${MO_UNPARSED:1}
                 mo::tokenizeTagContents moTemp ')'
-                moResult=("${moResult[@]}" "${moTemp[@]:1}" PAREN "${moTemp[0]}")
+                moResult=(${moResult[@]+"${moResult[@]}"} "${moTemp[@]:1}" PAREN "${moTemp[0]}")
                 MO_UNPARSED=${MO_UNPARSED:1}
                 ;;
 
@@ -1783,7 +1785,7 @@ mo::tokenizeTagContents() {
                 #: Do not tokenize the open brace - treat this as RPL
                 MO_UNPARSED=${MO_UNPARSED:1}
                 mo::tokenizeTagContents moTemp '}'
-                moResult=("${moResult[@]}" "${moTemp[@]:1}" BRACE "${moTemp[0]}")
+                moResult=(${moResult[@]+"${moResult[@]}"} "${moTemp[@]:1}" BRACE "${moTemp[0]}")
                 MO_UNPARSED=${MO_UNPARSED:1}
                 ;;
 
@@ -1793,17 +1795,17 @@ mo::tokenizeTagContents() {
 
             "'"*)
                 mo::tokenizeTagContentsSingleQuote moTemp
-                moResult=("${moResult[@]}" "${moTemp[@]}")
+                moResult=(${moResult[@]+"${moResult[@]}"} "${moTemp[@]}")
                 ;;
 
             '"'*)
                 mo::tokenizeTagContentsDoubleQuote moTemp
-                moResult=("${moResult[@]}" "${moTemp[@]}")
+                moResult=(${moResult[@]+"${moResult[@]}"} "${moTemp[@]}")
                 ;;
 
             *)
                 mo::tokenizeTagContentsName moTemp
-                moResult=("${moResult[@]}" "${moTemp[@]}")
+                moResult=(${moResult[@]+"${moResult[@]}"} "${moTemp[@]}")
                 ;;
         esac
 
@@ -1947,7 +1949,7 @@ mo::tokenizeTagContentsSingleQuote() {
 
 # Save the original command's path for usage later
 MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)/${BASH_SOURCE[0]##*/}"
-MO_VERSION="3.0.1"
+MO_VERSION="3.0.2"
 
 # If sourced, load all functions.
 # If executed, perform the actions as expected.

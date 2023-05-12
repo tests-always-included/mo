@@ -6,7 +6,21 @@ testArgs() {
     local args
     # shellcheck disable=SC2031
     args=$(declare -p MO_FUNCTION_ARGS)
-    echo -n "${args#*=}"
+
+    # The output from declare -p could look like these
+    #     declare -a MO_FUNCTION_ARGS=([0]="one")
+    #     declare -ax MO_FUNCTION_ARGS='([0]="one")'
+    # Trim leading declare statement and variable name
+    args="${args#*=}"
+
+    # If there are any quotes, remove them. The function arguments will always
+    # be an array.
+    if [[ "${args:0:1}" == "'" ]]; then
+        args=${args#\'}
+        args=${args%\'}
+    fi
+
+    echo -n "$args"
 }
 template() {
     cat <<EOF

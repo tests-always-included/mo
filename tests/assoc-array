@@ -3,7 +3,8 @@ cd "${0%/*}" || exit 1
 . ../run-tests
 
 declare -A repo
-repo[resque]="Resque"
+# The order of the array elements can be shuffled depending on the version of
+# Bash. Keeping this to a minimal set and alphabetized seems to help.
 repo[hub]="Hub"
 repo[rip]="Rip"
 export repo
@@ -18,7 +19,6 @@ expected() {
     cat <<EOF
   <b>hub - Hub</b>
   <b>rip - Rip</b>
-  <b>resque - Resque</b>
 EOF
 }
 
