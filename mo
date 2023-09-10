@@ -155,7 +155,7 @@ mo() (
                             moSource="${arg#-s=}"
                         fi
 
-                        if [[ -f "$moSource" ]]; then
+                        if [[ -e "$moSource" ]]; then
                             # shellcheck disable=SC1090
                             . "$moSource"
                         else
