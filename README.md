@@ -117,6 +117,8 @@ There are more scripts available in the [demos directory](demo/) that could help
 
 There are additional features that the program supports. Try using `mo --help` to see what is available.
 
+Please note that this command is written in Bash and pulls data from either the environment or (when using `--source`) from a text file that will be sourced and loaded into the environment, which means you will need to have Bash-style variables defined. Please see the examples in `demo/` for different ways you can use `mo`.
+
 
 Enhancements
 -----------

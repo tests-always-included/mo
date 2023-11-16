@@ -43,7 +43,8 @@ Options:
          This message.
    -s=FILE, --source=FILE
          Load FILE into the environment before processing templates.
-         Can be used multiple times.
+         Can be used multiple times. The file must be a valid shell script
+         and should only contain variable assignments.
    -o=DELIM, --open=DELIM
          Set the opening delimiter. Default is "{{".
    -c=DELIM, --close=DELIM
@@ -93,7 +94,7 @@ This is open source!  Please feel free to contribute.
 
 https://github.com/tests-always-included/mo
 
-MO_VERSION=3.0.3
+MO_VERSION=3.0.4
 EOF
 }
 

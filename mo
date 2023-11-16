@@ -38,7 +38,8 @@
 #/          This message.
 #/    -s=FILE, --source=FILE
 #/          Load FILE into the environment before processing templates.
-#/          Can be used multiple times.
+#/          Can be used multiple times. The file must be a valid shell script
+#/          and should only contain variable assignments.
 #/    -o=DELIM, --open=DELIM
 #/          Set the opening delimiter. Default is "{{".
 #/    -c=DELIM, --close=DELIM
@@ -1949,7 +1950,7 @@ mo::tokenizeTagContentsSingleQuote() {
 
 # Save the original command's path for usage later
 MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)/${BASH_SOURCE[0]##*/}"
-MO_VERSION="3.0.3"
+MO_VERSION="3.0.4"
 
 # If sourced, load all functions.
 # If executed, perform the actions as expected.
