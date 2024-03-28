@@ -121,7 +121,7 @@ Please note that this command is written in Bash and pulls data from either the 
 
 
 Enhancements
------------
+------------
 
 In addition to many of the features built-in to Mustache, `mo` includes a number of unique features that make it a bit more powerful.
 

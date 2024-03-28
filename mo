@@ -430,19 +430,29 @@ mo::indirectArray() {
 #
 # Returns nothing.
 mo::trimUnparsed() {
-    local moLast moR moN moT
+    local moLastLen moR moN moT
 
-    moLast=""
+    moLastLen=0
     moR=$'\r'
     moN=$'\n'
     moT=$'\t'
 
-    while [[ "$MO_UNPARSED" != "$moLast" ]]; do
-        moLast=$MO_UNPARSED
-        MO_UNPARSED=${MO_UNPARSED# }
-        MO_UNPARSED=${MO_UNPARSED#"$moR"}
-        MO_UNPARSED=${MO_UNPARSED#"$moN"}
-        MO_UNPARSED=${MO_UNPARSED#"$moT"}
+    while [[ "${#MO_UNPARSED}" != "$moLastLen" ]]; do
+        moLastLen=${#MO_UNPARSED}
+
+        # These conditions are necessary for a significant speed increase
+        while [[ "${MO_UNPARSED:0:1}" == " " ]]; do 
+            MO_UNPARSED=${MO_UNPARSED# }
+        done
+        while [[ "${MO_UNPARSED:0:1}" == "$moR" ]]; do
+            MO_UNPARSED=${MO_UNPARSED#"$moR"}
+        done
+        while [[ "${MO_UNPARSED:0:1}" == "$moN" ]]; do
+            MO_UNPARSED=${MO_UNPARSED#"$moN"}
+        done
+        while [[ "${MO_UNPARSED:0:1}" == "$moT" ]]; do
+            MO_UNPARSED=${MO_UNPARSED#"$moT"}
+        done
     done
 }
 
@@ -1950,7 +1960,7 @@ mo::tokenizeTagContentsSingleQuote() {
 
 # Save the original command's path for usage later
 MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)/${BASH_SOURCE[0]##*/}"
-MO_VERSION="3.0.4"
+MO_VERSION="3.0.5"
 
 # If sourced, load all functions.
 # If executed, perform the actions as expected.
