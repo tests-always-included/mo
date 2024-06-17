@@ -115,6 +115,8 @@ mo() (
     moDoubleHyphens=false
     MO_OPEN_DELIMITER_DEFAULT="{{"
     MO_CLOSE_DELIMITER_DEFAULT="}}"
+    MO_FUNCTION_CACHE_HIT=()
+    MO_FUNCTION_CACHE_MISS=()
 
     if [[ $# -gt 0 ]]; then
         for arg in "$@"; do
@@ -911,9 +913,27 @@ mo::parseValue() {
 #
 # Returns 0 if the name is a function, 1 otherwise.
 mo::isFunction() {
+    local moFunctionName
+
+    for moFunctionName in "${MO_FUNCTION_CACHE_HIT[@]}"; do
+        if [[ "$moFunctionName" == "$1" ]]; then
+            return 0
+        fi
+    done
+
+    for moFunctionName in "${MO_FUNCTION_CACHE_MISS[@]}"; do
+        if [[ "$moFunctionName" == "$1" ]]; then
+            return 1
+        fi
+    done
+
     if declare -F "$1" &> /dev/null; then
+        MO_FUNCTION_CACHE_HIT=( ${MO_FUNCTION_CACHE_HIT[@]+"${MO_FUNCTION_CACHE_HIT[@]}"} "$1" )
+
         return 0
     fi
+
+    MO_FUNCTION_CACHE_MISS=( ${MO_FUNCTION_CACHE_MISS[@]+"${MO_FUNCTION_CACHE_MISS[@]}"} "$1" )
 
     return 1
 }
