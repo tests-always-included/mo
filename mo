@@ -432,30 +432,19 @@ mo::indirectArray() {
 #
 # Returns nothing.
 mo::trimUnparsed() {
-    local moLastLen moR moN moT
+    local moI moC
 
-    moLastLen=0
-    moR=$'\r'
-    moN=$'\n'
-    moT=$'\t'
+    moI=0
+    moC=${MO_UNPARSED:0:1}
 
-    while [[ "${#MO_UNPARSED}" != "$moLastLen" ]]; do
-        moLastLen=${#MO_UNPARSED}
-
-        # These conditions are necessary for a significant speed increase
-        while [[ "${MO_UNPARSED:0:1}" == " " ]]; do 
-            MO_UNPARSED=${MO_UNPARSED# }
-        done
-        while [[ "${MO_UNPARSED:0:1}" == "$moR" ]]; do
-            MO_UNPARSED=${MO_UNPARSED#"$moR"}
-        done
-        while [[ "${MO_UNPARSED:0:1}" == "$moN" ]]; do
-            MO_UNPARSED=${MO_UNPARSED#"$moN"}
-        done
-        while [[ "${MO_UNPARSED:0:1}" == "$moT" ]]; do
-            MO_UNPARSED=${MO_UNPARSED#"$moT"}
-        done
+    while [[ "$moC" == " " || "$moC" == $'\r' || "$moC" == $'\n' || "$moC" == $'\t' ]]; do
+        moI=$((moI + 1))
+        moC=${MO_UNPARSED:$moI:1}
     done
+
+    if [[ "$moI" != 0 ]]; then
+        MO_UNPARSED=${MO_UNPARSED:$moI}
+    fi
 }
 
 
@@ -1430,31 +1419,39 @@ mo::standaloneCheck() {
 #
 # Returns nothing.
 mo::standaloneProcess() {
-    local moContent moLast moT moR moN
-
-    moT=$'\t'
-    moR=$'\r'
-    moN=$'\n'
-    moLast=
+    local moI moTemp
 
     mo::debug "Standalone tag - processing content before and after tag"
+    moI=$((${#MO_PARSED} - 1))
+    mo::debug "zero done ${#MO_PARSED}"
+    mo::escape moTemp "$MO_PARSED"
+    mo::debug "$moTemp"
 
-    while [[ "$moLast" != "$MO_PARSED" ]]; do
-        moLast=$MO_PARSED
-        MO_PARSED=${MO_PARSED% }
-        MO_PARSED=${MO_PARSED%"$moT"}
+    while [[ "${MO_PARSED:$moI:1}" == " " || "${MO_PARSED:$moI:1}" == $'\t' ]]; do
+        moI=$((moI - 1))
     done
 
-    moLast=
+    if [[ $((moI + 1)) != "${#MO_PARSED}" ]]; then
+        MO_PARSED="${MO_PARSED:0:${moI}+1}"
+    fi
 
-    while [[ "$moLast" != "$MO_UNPARSED" ]]; do
-        moLast=$MO_UNPARSED
-        MO_UNPARSED=${MO_UNPARSED# }
-        MO_UNPARSED=${MO_UNPARSED#"$moT"}
+    moI=0
+
+    while [[ "${MO_UNPARSED:${moI}:1}" == " " || "${MO_UNPARSED:${moI}:1}" == $'\t' ]]; do
+        moI=$((moI + 1))
     done
 
-    MO_UNPARSED=${MO_UNPARSED#"$moR"}
-    MO_UNPARSED=${MO_UNPARSED#"$moN"}
+    if [[ "${MO_UNPARSED:${moI}:1}" == $'\r' ]]; then
+        moI=$((moI + 1))
+    fi
+
+    if [[ "${MO_UNPARSED:${moI}:1}" == $'\n' ]]; then
+        moI=$((moI + 1))
+    fi
+
+    if [[ "$moI" != 0 ]]; then
+        MO_UNPARSED=${MO_UNPARSED:${moI}}
+    fi
 }
 
 
