@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+cd "${0%/*}" || exit 1
+. ../run-tests
+
+export uv
+export template='{{^uv}}OK{{/uv}}{{#uv}}FAIL{{/uv}}'
+export expected='OK'
+
+runTest

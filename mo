@@ -1002,13 +1002,24 @@ mo::isArrayIndexValid() {
 # Can not use logic like this in case invalid variable names are passed.
 #     [[ "${!1-a}" == "${!1-b}" ]]
 #
+# Using logic like this gives false positives.
+#     [[ -v "$a" ]]
+#
+# Declaring a variable is not the same as assigning the variable.
+#     export x
+#     declare -p x   # Output: declare -x x
+#     export y=""
+#     declare -p y   # Output: declare -x y=""
+#     unset z
+#     declare -p z   # Error code 1 and output: bash: declare: z: not found
+#
 # Returns true (0) if the variable is set, 1 if the variable is unset.
 mo::isVarSet() {
-    if ! declare -p "$1" &> /dev/null; then
-        return 1
+    if declare -p "$1" &> /dev/null && [[ -v "$1" ]]; then
+        return 0
     fi
 
-    return 0
+    return 1
 }
 
 
@@ -1977,7 +1988,7 @@ mo::tokenizeTagContentsSingleQuote() {
 
 # Save the original command's path for usage later
 MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)/${BASH_SOURCE[0]##*/}"
-MO_VERSION="3.0.6"
+MO_VERSION="3.0.7"
 
 # If sourced, load all functions.
 # If executed, perform the actions as expected.
