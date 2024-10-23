@@ -1002,25 +1002,45 @@ mo::isArrayIndexValid() {
 # Can not use logic like this in case invalid variable names are passed.
 #     [[ "${!1-a}" == "${!1-b}" ]]
 #
-# Using logic like this gives false positives.
+# Using logic like this gives false positives. Also, this is not supported on
+# Bash 3.2 and the script parsing will error before any commands are executed.
 #     [[ -v "$a" ]]
 #
 # Declaring a variable is not the same as assigning the variable.
 #     export x
 #     declare -p x   # Output: declare -x x
+#                    # Bash 3.2 returns error code 1 and outputs:
+#                    # bash: declare: x: not found
 #     export y=""
 #     declare -p y   # Output: declare -x y=""
 #     unset z
 #     declare -p z   # Error code 1 and output: bash: declare: z: not found
 #
 # Returns true (0) if the variable is set, 1 if the variable is unset.
-mo::isVarSet() {
-    if declare -p "$1" &> /dev/null && [[ -v "$1" ]]; then
-        return 0
-    fi
+unset MO_VAR_TEST_FOR_DECLARE
+if declare -p "MO_VAR_TEST_FOR_DECLARE" &> /dev/null; then
+    mo::debug "Using declare -p and [[ -v ]] for variable checks"
+    # More recent Bash
+    mo::isVarSet() {
+        # Do not convert this to [[, otherwise Bash 3.2 will fail to parse the
+        # script.
+        if declare -p "$1" &> /dev/null && test -v "$1"; then
+            return 0
+        fi
 
-    return 1
-}
+        return 1
+    }
+else
+    mo::debug "Using declare -p for variable checks"
+    # Bash 3.2
+    mo::isVarSet() {
+        if declare -p "$1" &> /dev/null; then
+            return 0
+        fi
+
+        return 1
+    }
+fi
 
 
 # Internal: Determine if a value is considered truthy.
