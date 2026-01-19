@@ -904,25 +904,39 @@ mo::parseValue() {
 mo::isFunction() {
     local moFunctionName
 
-    for moFunctionName in "${MO_FUNCTION_CACHE_HIT[@]}"; do
-        if [[ "$moFunctionName" == "$1" ]]; then
-            return 0
-        fi
-    done
+    # Need to test for the array length, otherwise Mac will report an
+    # unbound variable
+    if [[ "${#MO_FUNCTION_CACHE_HIT[@]}" -gt 0 ]]; then
+        for moFunctionName in "${MO_FUNCTION_CACHE_HIT[@]}"; do
+            if [[ "$moFunctionName" == "$1" ]]; then
+                return 0
+            fi
+        done
+    fi
 
-    for moFunctionName in "${MO_FUNCTION_CACHE_MISS[@]}"; do
-        if [[ "$moFunctionName" == "$1" ]]; then
-            return 1
-        fi
-    done
+    if [[ "${#MO_FUNCTION_CACHE_MISS[@]}" -gt 0 ]]; then
+        for moFunctionName in "${MO_FUNCTION_CACHE_MISS[@]}"; do
+            if [[ "$moFunctionName" == "$1" ]]; then
+                return 1
+            fi
+        done
+    fi
 
     if declare -F "$1" &> /dev/null; then
-        MO_FUNCTION_CACHE_HIT=( ${MO_FUNCTION_CACHE_HIT[@]+"${MO_FUNCTION_CACHE_HIT[@]}"} "$1" )
+        if [[ "${#MO_FUNCTION_CACHE_HIT[@]}" -gt 0 ]]; then
+            MO_FUNCTION_CACHE_HIT=( ${MO_FUNCTION_CACHE_HIT[@]+"${MO_FUNCTION_CACHE_HIT[@]}"} "$1" )
+        else
+            MO_FUNCTION_CACHE_HIT=( "$1" )
+        fi
 
         return 0
     fi
 
-    MO_FUNCTION_CACHE_MISS=( ${MO_FUNCTION_CACHE_MISS[@]+"${MO_FUNCTION_CACHE_MISS[@]}"} "$1" )
+    if [[ "${#MO_FUNCTION_CACHE_MISS[@]}" -gt 0 ]]; then
+        MO_FUNCTION_CACHE_MISS=( ${MO_FUNCTION_CACHE_MISS[@]+"${MO_FUNCTION_CACHE_MISS[@]}"} "$1" )
+    else
+        MO_FUNCTION_CACHE_MISS=( "$1" )
+    fi
 
     return 1
 }
@@ -1017,8 +1031,8 @@ mo::isArrayIndexValid() {
 #     declare -p z   # Error code 1 and output: bash: declare: z: not found
 #
 # Returns true (0) if the variable is set, 1 if the variable is unset.
-unset MO_VAR_TEST_FOR_DECLARE
-if declare -p "MO_VAR_TEST_FOR_DECLARE" &> /dev/null; then
+MO_VAR_TEST="ok"
+if test -v "MO_VAR_TEST" &> /dev/null; then
     mo::debug "Using declare -p and [[ -v ]] for variable checks"
     # More recent Bash
     mo::isVarSet() {
@@ -1041,6 +1055,7 @@ else
         return 1
     }
 fi
+unset MO_VAR_TEST
 
 
 # Internal: Determine if a value is considered truthy.
@@ -1458,7 +1473,8 @@ mo::standaloneProcess() {
     mo::escape moTemp "$MO_PARSED"
     mo::debug "$moTemp"
 
-    while [[ "${MO_PARSED:$moI:1}" == " " || "${MO_PARSED:$moI:1}" == $'\t' ]]; do
+    # Mac appears to allow getting characters from before the start of the string
+    while [[ "$moI" -ge 0 ]] && [[ "${MO_PARSED:$moI:1}" == " " || "${MO_PARSED:$moI:1}" == $'\t' ]]; do
         moI=$((moI - 1))
     done
 
