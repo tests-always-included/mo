@@ -1032,6 +1032,9 @@ mo::isArrayIndexValid() {
 #
 # Returns true (0) if the variable is set, 1 if the variable is unset.
 MO_VAR_TEST="ok"
+
+# This must not use `[[` because otherwise Bash 3.2 will stop execution and
+# always write to stderr without the ability to capture it.
 if test -v "MO_VAR_TEST" &> /dev/null; then
     mo::debug "Using declare -p and [[ -v ]] for variable checks"
     # More recent Bash
@@ -1048,6 +1051,7 @@ else
     mo::debug "Using declare -p for variable checks"
     # Bash 3.2
     mo::isVarSet() {
+        # If the variable is exported and not assigned, declare -p will error.
         if declare -p "$1" &> /dev/null; then
             return 0
         fi
@@ -2024,7 +2028,7 @@ mo::tokenizeTagContentsSingleQuote() {
 
 # Save the original command's path for usage later
 MO_ORIGINAL_COMMAND="$(cd "${BASH_SOURCE[0]%/*}" || exit 1; pwd)/${BASH_SOURCE[0]##*/}"
-MO_VERSION="3.0.7"
+MO_VERSION="3.1.0"
 
 # If sourced, load all functions.
 # If executed, perform the actions as expected.
